@@ -1,0 +1,2957 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pasta Sipariş Defteri — Banka Dekontu Takip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onerror="window.__gtLoadFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --paper:#FBF4E8;
+    --paper-dark:#F3E8D4;
+    --ink:#2A2018;
+    --ink-soft:#5C5042;
+    --wine:#7B2D3E;
+    --wine-soft:#9C4A5C;
+    --gold:#B8863B;
+    --sage:#5C6B4F;
+    --line:#D8C9A8;
+    --white:#FFFDF8;
+    --danger:#C0392B;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(42,32,24,0.05) 1px, transparent 0);
+    background-size: 22px 22px;
+    color:var(--ink);
+    font-family:'Work Sans', sans-serif;
+    padding:0 0 60px 0;
+  }
+  header{
+    padding:36px 24px 28px;
+    border-bottom:2px solid var(--ink);
+    background:var(--paper-dark);
+    position:relative;
+  }
+  header::after{
+    content:"";
+    position:absolute; left:0; right:0; bottom:-6px;
+    height:6px;
+    background:repeating-linear-gradient(90deg, var(--wine) 0 14px, transparent 14px 24px);
+    opacity:.55;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--wine);
+    margin:0 0 6px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:clamp(28px,5vw,42px);
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    max-width:640px;
+    line-height:1.5;
+  }
+  main{
+    max-width:1100px;
+    margin:0 auto;
+    padding:28px 20px 0;
+  }
+  section{
+    margin-bottom:32px;
+  }
+  .card{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px;
+    box-shadow:0 1px 0 rgba(42,32,24,0.04);
+  }
+  h2{
+    font-family:'Fraunces', serif;
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  .sub{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:0 0 16px;
+  }
+  .dropzone{
+    border:2px dashed var(--line);
+    border-radius:10px;
+    padding:28px 18px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--wine);
+    background:#FBF0EE;
+  }
+  .dropzone strong{ display:block; font-size:15px; margin-bottom:4px; }
+  .dropzone span{ font-size:12.5px; color:var(--ink-soft); }
+  input[type=file]{ display:none; }
+  .status-line{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    color:var(--wine);
+    margin-top:12px;
+    min-height:16px;
+  }
+  .status-line.error{ color:var(--danger); }
+  .progress-bar{
+    height:6px; border-radius:4px; background:var(--paper-dark);
+    overflow:hidden; margin-top:8px; display:none;
+  }
+  .progress-bar.active{ display:block; }
+  .progress-bar > div{
+    height:100%; background:var(--wine); width:0%;
+    transition:width .2s;
+  }
+
+  .review-card{
+    border:1px solid var(--line);
+    border-left:4px solid var(--gold);
+    border-radius:8px;
+    padding:16px;
+    margin-bottom:14px;
+    background:var(--white);
+    animation:fadein .25s ease;
+  }
+  .review-card.duplicate{
+    border-left-color:var(--danger);
+    background:#FDF2F0;
+  }
+  .review-card .fname{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--ink-soft); margin-bottom:10px;
+    word-break:break-all;
+  }
+  .field-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:10px;
+    margin-bottom:10px;
+  }
+  label{
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    color:var(--ink-soft);
+    display:block;
+    margin-bottom:4px;
+  }
+  input[type=text], input[type=date], input[type=number], select{
+    width:100%;
+    padding:8px 9px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-family:'Work Sans', sans-serif;
+    font-size:13.5px;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  input:focus, select:focus{
+    outline:2px solid var(--wine-soft);
+    outline-offset:1px;
+  }
+  .ocr-toggle{
+    font-size:12px; color:var(--wine); cursor:pointer;
+    text-decoration:underline; margin-bottom:10px; display:inline-block;
+    background:none; border:none; padding:0; font-family:inherit;
+  }
+  .ocr-text{
+    display:none;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; color:var(--ink-soft);
+    background:var(--paper-dark); border-radius:6px;
+    padding:10px; max-height:160px; overflow:auto;
+    white-space:pre-wrap; margin-bottom:10px;
+  }
+  .ocr-text.open{ display:block; }
+  .btn{
+    font-family:'Work Sans', sans-serif;
+    font-weight:600;
+    font-size:13px;
+    padding:9px 16px;
+    border-radius:7px;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--white);
+    cursor:pointer;
+  }
+  .btn:hover{ background:#3a2c1f; }
+  .btn.secondary{
+    background:transparent; color:var(--ink); border-color:var(--line);
+  }
+  .btn.secondary:hover{ background:var(--paper-dark); }
+  .btn.wine{ background:var(--wine); border-color:var(--wine); }
+  .btn.wine:hover{ background:var(--wine-soft); }
+  .btn.small{ padding:6px 10px; font-size:12px; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .row-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .chip{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    padding:5px 12px;
+    border-radius:20px;
+    border:1px solid var(--gold);
+    color:var(--gold);
+    background:#FBF6EC;
+    cursor:pointer;
+  }
+  .chip:hover{ background:var(--gold); color:var(--white); }
+  .chip .x{ margin-left:6px; opacity:.6; }
+
+  .toolbar{
+    display:flex; justify-content:space-between; align-items:center;
+    flex-wrap:wrap; gap:10px; margin-bottom:14px;
+  }
+  .toolbar select{ width:auto; }
+
+  /* Özet kartları */
+  .summary-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+    gap:12px;
+    margin-bottom:18px;
+  }
+  .summary-card{
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:14px 16px;
+    text-align:center;
+  }
+  .summary-card .label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .summary-card .value{
+    font-family:'Fraunces', serif;
+    font-size:22px;
+    font-weight:700;
+    color:var(--ink);
+  }
+  .summary-card .value.wine{ color:var(--wine); }
+  .summary-card .value.sage{ color:var(--sage); }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; table-layout:fixed; }
+  thead th{
+    position:sticky; top:0; z-index:5;
+    background:var(--white);
+    font-family:'IBM Plex Mono', monospace;
+    text-transform:uppercase; font-size:10px; letter-spacing:.03em;
+    text-align:left; color:var(--ink-soft);
+    border-bottom:2px solid var(--ink);
+    padding:8px 6px;
+  }
+  tbody td, tfoot td{
+    padding:9px 6px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
+  /* Sütunlar toplam genişliğin %100'üne sığacak şekilde paylaştırılır,
+     böylece tablo yatay kaydırma gerektirmeden ekrana sığar. */
+  #ordersTable col.col-kisi{ width:10%; }
+  #ordersTable col.col-banka{ width:9%; }
+  #ordersTable col.col-kaporano{ width:8%; }
+  #ordersTable col.col-kapora{ width:7%; }
+  #ordersTable col.col-kaporatarih{ width:7%; }
+  #ordersTable col.col-kalanno{ width:8%; }
+  #ordersTable col.col-kalan{ width:7%; }
+  #ordersTable col.col-kalantarih{ width:7%; }
+  #ordersTable col.col-aciklama{ width:13%; }
+  #ordersTable col.col-toplam{ width:7%; }
+  #ordersTable col.col-durum{ width:6%; }
+  #ordersTable col.col-dosya{ width:6%; }
+  #ordersTable col.col-islem{ width:5%; }
+  tbody tr:hover{ background:var(--paper-dark); }
+  tbody tr.new-row{ animation:highlightRow 2s ease; }
+  tbody tr.editing-row{ background:#FBF0E0; }
+  tbody tr.editing-row input{
+    width:100%; font-size:12px; padding:3px 4px; border:1px solid var(--line);
+    border-radius:4px; font-family:inherit; background:var(--white);
+  }
+  @keyframes highlightRow{
+    0%{ background:#EAF0E5; }
+    100%{ background:transparent; }
+  }
+  .num{ font-family:'IBM Plex Mono', monospace; text-align:right; white-space:nowrap; }
+  .status-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; padding:3px 9px; border-radius:12px;
+    display:inline-block;
+  }
+  .status-pill.done{ background:#EAF0E5; color:var(--sage); }
+  .status-pill.waiting{ background:#F8ECE2; color:#A0632B; }
+  tfoot td{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    border-top:2px solid var(--ink);
+    padding:10px 8px;
+  }
+  .empty{
+    text-align:center; color:var(--ink-soft); font-size:13.5px;
+    padding:30px 10px;
+  }
+  .link-btn{
+    background:none; border:none; color:var(--wine); cursor:pointer;
+    font-size:12px; text-decoration:underline; padding:0; font-family:'Work Sans',sans-serif;
+  }
+  .form-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:12px; margin-bottom:14px;
+  }
+  details.manual{ margin-top:6px; }
+  summary{
+    cursor:pointer; font-weight:600; font-size:13.5px;
+    color:var(--wine); list-style:none;
+  }
+  summary::-webkit-details-marker{ display:none; }
+  summary::before{ content:"+ "; }
+  details[open] summary::before{ content:"– "; }
+  .manual-body{ margin-top:14px; }
+  .note{
+    font-size:12px; color:var(--ink-soft); background:var(--paper-dark);
+    border-radius:6px; padding:10px 12px; margin-top:6px;
+  }
+  .note.error{
+    background:#FDF2F0; color:var(--danger); border:1px solid #F5C6C0;
+  }
+
+  .tabbar{
+    max-width:1100px; margin:0 auto; padding:14px 20px 0;
+    display:flex; gap:10px; flex-wrap:wrap;
+  }
+  .tab-btn{
+    font-family:'Work Sans', sans-serif; font-weight:600; font-size:13.5px;
+    padding:10px 18px; border-radius:8px 8px 0 0;
+    border:1px solid var(--line); border-bottom:none;
+    background:var(--paper-dark); color:var(--ink-soft); cursor:pointer;
+  }
+  .tab-btn.active{ background:var(--white); color:var(--wine); border-color:var(--wine); }
+
+  .cake-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr));
+    gap:16px;
+  }
+  .cake-card{
+    border:1px solid var(--line); border-radius:10px; overflow:hidden;
+    background:var(--white); display:flex; flex-direction:column;
+    animation:fadein .25s ease;
+  }
+  .cake-card .cake-photo{
+    width:100%; height:140px; object-fit:cover; background:var(--paper-dark);
+    display:block;
+  }
+  .cake-card .cake-photo.placeholder{
+    display:flex; align-items:center; justify-content:center;
+    font-size:34px; color:var(--line);
+  }
+  .cake-card .cake-body{ padding:14px; flex:1; display:flex; flex-direction:column; gap:6px; }
+  .cake-card .cake-name{ font-family:'Fraunces', serif; font-size:16.5px; font-weight:700; margin:0; }
+  .cake-card .cake-meta{ font-size:12.5px; color:var(--ink-soft); line-height:1.5; }
+  .cake-card .cake-note{
+    font-size:12px; color:var(--ink); background:var(--paper-dark);
+    border-radius:6px; padding:6px 8px; margin-top:2px;
+  }
+  .cake-card .cake-price{
+    font-family:'IBM Plex Mono', monospace; font-weight:600; color:var(--wine); font-size:14px;
+  }
+  .cake-card .cake-footer{
+    padding:10px 14px; border-top:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+  }
+  .cake-card select.durum-select{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; padding:5px 6px;
+    border-radius:6px; border:1px solid var(--line); background:var(--paper);
+  }
+  .gt-task-item{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+    margin-bottom:8px; font-size:13px; background:var(--paper);
+  }
+  .gt-task-item .gt-task-title{ font-weight:600; }
+  .gt-task-item .gt-task-due{ font-size:11.5px; color:var(--ink-soft); font-family:'IBM Plex Mono', monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Fırın Hesap Defteri</p>
+  <h1>Pasta Sipariş Defteri</h1>
+  <p>Banka dekontlarını (e-Dekont PDF/HTML, EFT/FAST/Havale) zip olarak ya da tek tek yükleyin, program gönderen/alıcı adı, tutar, tarih ve açıklama alanlarını otomatik okumayı dener; siz kontrol edip onaylarsınız. Hesaba giren ödemeler sipariş (kapora/kalan) olarak, hesaptan çıkan ödemeler (kira, havale, kredi kartı vb.) ise otomatik olarak gider olarak işaretlenir.</p>
+  <div style="margin-top:16px; padding:12px 14px; background:var(--white); border:1px solid var(--line); border-radius:8px;">
+    <label style="margin-bottom:6px;">✉️ Hesap E-postası (aynı listeyi diğer telefon/bilgisayarlarınızda da görmek için)</label>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="email" id="acctEmail" placeholder="ornek@eposta.com" style="flex:1; min-width:220px; max-width:340px;">
+      <button class="btn secondary small" id="acctEmailSave">Kaydet</button>
+    </div>
+    <div class="status-line" id="acctEmailStatus" style="margin-top:6px;">Buraya bir e-posta girip Kaydet'e basarsanız; aynı e-postayı başka bir telefon veya bilgisayarda da girdiğinizde tüm sipariş listeleriniz orada da görünür. E-posta boş bırakılırsa kayıtlar sadece bu cihazda kalır.</div>
+  </div>
+</header>
+
+<nav class="tabbar">
+  <button class="tab-btn active" id="tabBtnDekont" data-tab="dekont">💳 Dekont Takip</button>
+  <button class="tab-btn" id="tabBtnSiparis" data-tab="siparis">🎂 Siparişlerim</button>
+</nav>
+
+<main>
+<div id="tab-dekont">
+
+  <section>
+    <div class="card">
+      <h2>1 · Banka Dekontu Yükle</h2>
+      <p class="sub">İçinde PDF, HTML veya görsel (jpg/png) banka dekontları (e-Dekont, EFT/FAST/Havale makbuzu) bulunan bir .zip dosyası ya da tekil dosyalar seçin.</p>
+      <div class="dropzone" id="dropzone">
+        <strong>Dosyaları buraya sürükleyin ya da tıklayıp seçin (çoklu seçim olur)</strong>
+        <span>Birden fazla dosya birden seçebilirsiniz — zip, e-Dekont (.html), .pdf, .jpg, .png</span>
+        <input type="file" id="fileInput" accept=".zip,.xml,.html,.htm,.pdf,.jpg,.jpeg,.png" multiple>
+      </div>
+      <div class="progress-bar" id="progressBar"><div id="progressFill"></div></div>
+      <div class="status-line" id="statusLine"></div>
+    </div>
+  </section>
+
+  <section id="reviewSection" style="display:none;">
+    <div class="card">
+      <h2>⚠️ Otomatik Eklenemeyen Dekontlar</h2>
+      <p class="sub">Sorunsuz okunan işlemler zaten aşağıdaki listeye otomatik eklendi. Burada sadece bir sebeple (eksik/şüpheli bilgi, tekrar eden dekont no vb.) otomatik eklenemeyenler var — sebebini okuyup alanları düzeltin ve Kaydet'e basın, ya da Yoksay'a basarak atlayın.</p>
+      <div id="reviewList"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Elle Kayıt / Sık Kullanılan Kişiler</h2>
+      <p class="sub">Dekont yüklemeden de sipariş ekleyebilir, sık kullandığınız isimleri hızlıca seçebilirsiniz.</p>
+      <div class="chips" id="favChips"></div>
+      <div style="margin-bottom:14px; display:flex; gap:8px;">
+        <input type="text" id="newFavInput" placeholder="Yeni kişi ekle" style="max-width:220px;">
+        <button class="btn secondary small" id="addFavBtn">Ekle</button>
+      </div>
+      <details class="manual">
+        <summary>Yeni sipariş elle ekle</summary>
+        <div class="manual-body">
+          <div class="form-grid">
+            <div><label>Kayıt Türü</label>
+              <select id="m_kayit_turu">
+                <option value="siparis" selected>Sipariş (Gelir)</option>
+                <option value="gider">Gider</option>
+              </select>
+            </div>
+            <div><label id="m_kisi_label">Kişi</label><input type="text" id="m_kisi"></div>
+            <div><label>Banka</label><input type="text" id="m_banka"></div>
+          </div>
+          <div class="form-grid" id="m_kapora_fields">
+            <div><label>Kapora Dekont No</label><input type="text" id="m_kapora_fatura_no" placeholder="Belge No / İşlem Ref"></div>
+            <div><label>Kapora Tutarı (₺)</label><input type="number" id="m_kapora_tutar" step="0.01"></div>
+            <div><label>Kapora Tarihi</label><input type="date" id="m_kapora_tarih"></div>
+            <div><label>Kapora Açıklaması</label><input type="text" id="m_kapora_aciklama" placeholder="Dekont açıklaması"></div>
+          </div>
+          <div class="form-grid">
+            <div><label id="m_kalan_no_label">Kalan Dekont No</label><input type="text" id="m_kalan_fatura_no" placeholder="Belge No / İşlem Ref"></div>
+            <div><label id="m_kalan_tutar_label">Kalan Tutar (₺)</label><input type="number" id="m_kalan_tutar" step="0.01"></div>
+            <div><label id="m_kalan_tarih_label">Kalan Tarihi</label><input type="date" id="m_kalan_tarih"></div>
+            <div><label id="m_kalan_aciklama_label">Kalan Açıklaması</label><input type="text" id="m_kalan_aciklama" placeholder="Dekont açıklaması"></div>
+          </div>
+          <button class="btn wine" id="m_save">Siparişi Kaydet</button>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Sipariş Listesi</h2>
+      <p class="sub">Arşivlenen banka dekontlarından derlenen kapora / kalan / toplam / açıklama tablosu.</p>
+      
+      <!-- Özet Kartları -->
+      <div class="summary-grid" id="summaryGrid"></div>
+      
+      <div class="toolbar">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <select id="monthFilter"></select>
+          <select id="statusFilter">
+            <option value="all">Tüm Durumlar</option>
+            <option value="done">Tamamlandı</option>
+            <option value="waiting">Bekliyor</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn secondary small" id="exportBtn">CSV İndir</button>
+          <span id="countLabel" style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft);"></span>
+        </div>
+      </div>
+      <div style="overflow-x:auto; max-width:100%;">
+        <table id="ordersTable">
+          <colgroup>
+            <col class="col-kisi"><col class="col-banka">
+            <col class="col-kaporano"><col class="col-kapora"><col class="col-kaporatarih">
+            <col class="col-kalanno"><col class="col-kalan"><col class="col-kalantarih">
+            <col class="col-aciklama">
+            <col class="col-toplam"><col class="col-durum"><col class="col-dosya"><col class="col-islem">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Kişi</th><th>Banka</th>
+              <th>Kapora Dekont No</th><th>Kapora</th><th>Kapora Tarihi</th>
+              <th>Kalan Dekont No</th><th>Kalan</th><th>Kalan Tarihi</th>
+              <th>Açıklama</th>
+              <th>Toplam</th><th>Durum</th><th>Dekont</th><th>İşlemler</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+          <tfoot id="ordersFoot"></tfoot>
+        </table>
+      </div>
+      <div class="empty" id="emptyMsg" style="display:none;">Henüz sipariş kaydı yok. Yukarıdan dekont yükleyin ya da elle ekleyin.</div>
+    </div>
+  </section>
+
+</div>
+<!-- ============ SİPARİŞLERİM SEKMESİ ============ -->
+<div id="tab-siparis" style="display:none;">
+
+  <section>
+    <div class="card">
+      <h2>🔗 Google Bağlantısı</h2>
+      <p class="sub">Telefon, WhatsApp veya Instagram'dan aldığınız siparişleri Google Tasks'a not olarak yazmaya devam edin; buradan tek tıkla çekip pasta detaylarını tamamlayın. Ayrıca aşağıdaki "Ortak Sipariş Deposu" ile farklı kişiler farklı cihazlardan aynı sipariş listesini görüp düzenleyebilir. Bağlantı ücretsizdir, tek seferlik ve basit bir kurulum gerektirir.</p>
+      <details class="manual" id="gtSetupDetails" style="margin-top:16px;">
+        <summary>Nasıl bağlanırım? (ilk kurulum — sadece bir kere)</summary>
+        <div class="manual-body">
+          <ol style="font-size:13px; color:var(--ink-soft); line-height:1.7; padding-left:18px; margin:0 0 14px;">
+            <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud Console</a>'da ücretsiz yeni bir proje açın.</li>
+            <li>Sol menüden <strong>"API'ler ve Hizmetler → Kitaplık"</strong>a girip <strong>"Google Tasks API"</strong>yı ve <strong>"Google Drive API"</strong>yı bulup ikisini de <strong>Etkinleştir</strong>'e basın.</li>
+            <li><strong>"API'ler ve Hizmetler → Kimlik Bilgileri"</strong>ne gidin → <strong>Kimlik bilgisi oluştur → OAuth istemci kimliği</strong> → Uygulama türü: <strong>Web uygulaması</strong>.</li>
+            <li>"Yetkilendirilmiş JavaScript kaynakları" kısmına, bu sayfayı hangi adresten açacaksanız o adresi ekleyin (örn. dosyayı bilgisayarınızda açıyorsanız gerek yok, bir web sunucusunda barındırıyorsanız o adresi yazın).</li>
+            <li>Oluşan <strong>İstemci Kimliği (Client ID)</strong>'ni kopyalayıp aşağıya yapıştırın ve Kaydet'e basın.</li>
+          </ol>
+          <div class="note">Not: Ortak sipariş deposunu farklı kişilerle kullanacaksanız, her kişinin kendi bilgisayarında bu Client ID'yi kaydedip "Google ile Bağlan"a basması gerekir — Client ID'yi paylaşmakta sakınca yoktur, gizli bir bilgi değildir. Google ilk bağlanışta "doğrulanmamış uygulama" uyarısı gösterebilir; bu normaldir (uygulamayı siz oluşturduğunuz için) — "Gelişmiş" → "…'e git (güvenli değil)" diyerek devam edebilirsiniz.</div>
+          <div class="note">Not: Bu sayfa Claude önizlemesi içindeyken Google'ın giriş penceresi güvenlik kısıtlamaları yüzünden açılmayabilir. En sağlıklısı: dosyayı bilgisayarınıza indirip kendi tarayıcınızda (veya basit bir web barındırmada) açmanız, adres çubuğundaki o adresi 3. adımdaki "Yetkilendirilmiş kaynaklar"a eklemenizdir.</div>
+          <div class="form-grid" style="margin-top:12px;">
+            <div style="grid-column:1/-1;"><label>Google OAuth İstemci Kimliği (Client ID)</label>
+              <input type="text" id="gtClientId" placeholder="xxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"></div>
+          </div>
+          <button class="btn secondary small" id="gtSaveClientId">Client ID'yi Kaydet</button>
+        </div>
+      </details>
+      <div class="row-actions" style="margin-top:14px;">
+        <button class="btn wine" id="gtConnectBtn">Google ile Bağlan</button>
+        <button class="btn secondary" id="gtFetchBtn" disabled>Görevleri Getir</button>
+      </div>
+      <div class="status-line" id="gtStatusLine"></div>
+      <div id="gtTaskList" style="margin-top:14px;"></div>
+
+      <hr style="border:none; border-top:1px solid var(--line); margin:20px 0;">
+      <h3 style="margin:0 0 6px; font-family:'Fraunces',serif; font-size:16px;">☁️ Ortak Sipariş Deposu</h3>
+      <p class="sub" style="margin-top:0;">Farklı kişiler farklı cihazlardan giriş yapıp AYNI sipariş listesini görmek/düzenlemek isterse, siparişleri bu cihazda değil sizin Google Drive'ınızdaki paylaşılan bir dosyada saklayın. Önce yukarıdan "Google ile Bağlan"a basmanız gerekir.</p>
+
+      <div id="driveSetupArea" style="display:none;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn secondary small" id="driveCreateBtn">🆕 Yeni Ortak Liste Oluştur</button>
+          <span style="font-size:12px; color:var(--ink-soft);">veya</span>
+          <input type="text" id="driveJoinCode" placeholder="Bana gönderilen Dosya ID'sini yapıştırın" style="flex:1; min-width:200px;">
+          <button class="btn secondary small" id="driveJoinBtn">🔗 Bu Listeye Bağlan</button>
+        </div>
+      </div>
+
+      <div id="driveConnectedArea" style="display:none;">
+        <div class="note" style="background:#EAF4EC; border-color:#BFE0C6;">
+          ☁️ Ortak listeye bağlısınız (<strong id="driveFileNameLabel">—</strong>). Bu listeyi başkalarıyla paylaşmak için: (1) Dosya ID'sini kopyalayıp onlara gönderin, kendileri "Bu Listeye Bağlan" ile aynı ID'yi girsin; (2) ayrıca Google Drive'da bu dosyayı onlarla "Düzenleyebilir" olarak paylaşmayı unutmayın (Drive'da dosyayı bulup sağ tık → Paylaş).
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap;">
+          <button class="btn secondary small" id="driveCopyIdBtn">📋 Dosya ID'sini Kopyala</button>
+          <button class="btn secondary small" id="driveSyncNowBtn">🔄 Şimdi Senkronize Et</button>
+          <button class="btn secondary small" id="driveDisconnectBtn">Bağlantıyı Kes (yerel moda dön)</button>
+        </div>
+        <div class="status-line" id="driveSyncStatus"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2 id="cakeFormTitle">🎂 Yeni Pasta Siparişi</h2>
+      <p class="sub">Google Tasks'tan aktardıysanız isim/not otomatik dolar; kalan pasta detaylarını siz girin. Elle de sıfırdan ekleyebilirsiniz.</p>
+      <div class="form-grid">
+        <div><label>Müşteri Adı</label><input type="text" id="c_musteri"></div>
+        <div><label>Telefon</label><input type="text" id="c_telefon" placeholder="05xx xxx xx xx"></div>
+        <div style="grid-column:1/-1;">
+          <label>Adres</label>
+          <div style="display:flex; gap:8px; align-items:flex-start;">
+            <input type="text" id="c_adres" placeholder="Teslimat adresi (opsiyonel) — tıklayınca Google Haritalar'da açılır" style="flex:1;" autocomplete="off">
+            <button type="button" class="btn secondary small" id="c_adresMic" title="Sesle söyleyerek yazın">🎤</button>
+            <button type="button" class="btn secondary small" id="c_adresMapBtn" title="Google Haritalar'da aç">🗺️</button>
+          </div>
+          <div id="c_adresMicStatus" style="font-size:11.5px; color:var(--ink-soft); margin-top:4px;"></div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div><label>İstenen Tarih</label><input type="date" id="c_tarih"></div>
+        <div><label>Kişi Sayısı</label><input type="number" id="c_kisisayisi" min="1" placeholder="Örn. 12"></div>
+        <div><label>Fiyat (₺)</label><input type="number" id="c_fiyat" step="0.01"></div>
+        <div><label>Kapora (₺)</label><input type="number" id="c_kapora" step="0.01" placeholder="Alınan kapora tutarı"></div>
+        <div><label>Durum</label>
+          <select id="c_durum">
+            <option value="bekliyor">Bekliyor</option>
+            <option value="hazirlaniyor">Hazırlanıyor</option>
+            <option value="hazir">Hazır</option>
+            <option value="teslim">Teslim Edildi</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div><label>Kek Tipi</label>
+          <select id="c_kektipi">
+            <option value="sade">Sade</option>
+            <option value="kakao">Kakao</option>
+            <option value="karisik">Karışık (Sade+Kakao)</option>
+            <option value="red-velvet">Red Velvet</option>
+            <option value="diger">Diğer</option>
+          </select>
+        </div>
+        <div><label>İç Malzeme</label>
+          <select id="c_icmalzeme">
+            <option value="meyveli">Meyveli</option>
+            <option value="cikolatali">Çikolatalı</option>
+            <option value="fistikli">Fıstıklı</option>
+            <option value="frambuazli">Frambuazlı</option>
+            <option value="karisik">Karışık</option>
+            <option value="diger">Diğer</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1;"><label>Sipariş Notu</label>
+          <div style="display:flex; gap:8px; align-items:flex-start;">
+            <textarea id="c_not" rows="3" style="flex:1; font-family:inherit; font-size:14px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--white); resize:vertical;" placeholder="Örn. üzerinde 'Doğum günün kutlu olsun Ada' yazsın"></textarea>
+            <button type="button" class="btn secondary" id="c_notMic" title="Sesle söyleyerek yazın">🎤</button>
+          </div>
+          <div id="c_notMicStatus" style="font-size:11.5px; color:var(--ink-soft); margin-top:4px;"></div>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div style="grid-column:1/-1;">
+          <label>Pasta Fotoğrafı (referans/örnek görsel)</label>
+          <input type="file" id="c_foto" accept="image/*" style="display:none;">
+          <button type="button" class="btn secondary" id="c_fotoBtn">📷 Fotoğraf Ekle</button>
+          <span id="c_fotoFileName" style="font-size:12px; color:var(--ink-soft); margin-left:8px;"></span>
+          <div style="font-size:11.5px; color:var(--ink-soft); margin-top:4px;">Telefonda: WhatsApp'tan gelen pasta fotoğrafını önce galeriye/telefona indirin, sonra bu butona basıp galeriden seçin.</div>
+          <br>
+          <img id="c_fotoPreview" style="display:none; max-height:160px; border-radius:8px; margin-top:8px; border:1px solid var(--line);">
+        </div>
+      </div>
+      <button class="btn wine" id="c_save">Siparişi Kaydet</button>
+      <button class="btn secondary" id="c_cancelEdit" style="display:none;">Vazgeç</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>Pasta Siparişleri</h2>
+      <div class="toolbar">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <select id="cDurumFilter">
+            <option value="all">Tüm Durumlar</option>
+            <option value="bekliyor">Bekliyor</option>
+            <option value="hazirlaniyor">Hazırlanıyor</option>
+            <option value="hazir">Hazır</option>
+            <option value="teslim">Teslim Edildi</option>
+          </select>
+        </div>
+        <span id="cCountLabel" style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft);"></span>
+      </div>
+      <div class="cake-grid" id="cakeGrid"></div>
+      <div class="empty" id="cakeEmptyMsg" style="display:none;">Henüz pasta siparişi yok. Yukarıdan ekleyin ya da Google Tasks'tan içe aktarın.</div>
+    </div>
+  </section>
+
+  <section id="teslimatListesiSection" style="display:none;">
+    <div class="card">
+      <h2>📋 Teslimat Listesi</h2>
+      <p class="sub">Her yeni sipariş oluşturduğunuzda buraya otomatik eklenir ve durumu değiştirdikçe güncellenir. Tarihe göre sıralıdır.</p>
+      <div class="toolbar">
+        <span id="teslimatCountLabel" style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft);"></span>
+        <button class="btn secondary small" id="teslimatPrintBtn">🖨️ Listeyi Yazdır</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;" id="teslimatTable">
+          <thead>
+            <tr style="text-align:left; border-bottom:2px solid var(--ink);">
+              <th style="padding:6px 8px;">Tarih</th>
+              <th style="padding:6px 8px;">Müşteri</th>
+              <th style="padding:6px 8px;">Telefon</th>
+              <th style="padding:6px 8px;">Adres</th>
+              <th style="padding:6px 8px;">Kek / İç</th>
+              <th style="padding:6px 8px;">Fiyat</th>
+              <th style="padding:6px 8px;">Kapora / Kalan</th>
+              <th style="padding:6px 8px;">Durum</th>
+            </tr>
+          </thead>
+          <tbody id="teslimatTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<script>
+// ============================================================
+// Bu sayfa Claude'un önizleme ortamı dışında (bilgisayarınızda çift
+// tıklayarak, file:// ile ya da kendi web sunucunuzda) açıldığında,
+// Claude'un window.storage API'si bulunmaz. Bu durumda tüm kayıtlar
+// (siparişler, dekontlar, fotoğraflar) sessizce kaybolurdu. Aşağıdaki
+// blok, window.storage yoksa aynı arayüzü tarayıcının kendi IndexedDB'si
+// üzerinden sağlar — böylece kodun geri kalanı hiç değişmeden, veriler
+// bu bilgisayardaki bu tarayıcıda kalıcı olarak saklanır.
+// ============================================================
+// FIREBASE AYARI — kendi Firebase projenizin bilgilerini buraya yapıştırın.
+// (Firebase konsolu > Proje ayarları > "SDK setup and configuration" altında
+// bulacağınız firebaseConfig nesnesi. Bu bilgiler gizli değildir, tarayıcıda
+// görünmeleri normaldir; gerçek güvenlik Firestore "kurallar" sekmesinde
+// sağlanır.)
+const firebaseConfig = {
+  apiKey: "AIzaSyDA0rAwfBBuxywIqs46WNQoSHQ_jnrwViA",
+  authDomain: "pasta-siparis-defteri.firebaseapp.com",
+  projectId: "pasta-siparis-defteri",
+  storageBucket: "pasta-siparis-defteri.firebasestorage.app",
+  messagingSenderId: "298686527672",
+  appId: "1:298686527672:web:03b2368337daf90d14dc4d"
+};
+const firebaseConfigured = firebaseConfig.apiKey !== "BURAYA_YAPISTIRIN";
+let db = null;
+if(firebaseConfigured){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  }catch(e){ console.error('Firebase başlatılamadı:', e); }
+}
+
+(function(){
+  if(window.storage) return; // Claude önizlemesindeyiz, hazır API zaten var
+  const DB_NAME = 'pasta_siparis_defteri_db';
+  const STORE = 'kv';
+  let dbPromise = null;
+  function openDb(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = ()=>{ req.result.createObjectStore(STORE); };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    return dbPromise;
+  }
+  function fullKey(key, shared){ return (shared ? 'shared:' : 'local:') + key; }
+  // Firestore doküman ID'leri '/' içeremez; anahtarlarımızda bu karakter
+  // geçmiyor ama yine de güvene alalım.
+  function docIdFor(key){ return key.replace(/\//g, '_SLASH_'); }
+
+  const localStore = {
+    async get(key, shared){
+      const idb = await openDb();
+      return new Promise((resolve, reject)=>{
+        const tx = idb.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).get(fullKey(key, shared));
+        req.onsuccess = ()=>{
+          if(req.result === undefined) reject(new Error('Anahtar bulunamadı: '+key));
+          else resolve({ key, value: req.result, shared: !!shared });
+        };
+        req.onerror = ()=> reject(req.error);
+      });
+    },
+    async set(key, value, shared){
+      const idb = await openDb();
+      return new Promise((resolve, reject)=>{
+        const tx = idb.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(value, fullKey(key, shared));
+        tx.oncomplete = ()=> resolve({ key, value, shared: !!shared });
+        tx.onerror = ()=> reject(tx.error);
+      });
+    },
+    async delete(key, shared){
+      const idb = await openDb();
+      return new Promise((resolve, reject)=>{
+        const tx = idb.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(fullKey(key, shared));
+        tx.oncomplete = ()=> resolve({ key, deleted:true, shared: !!shared });
+        tx.onerror = ()=> reject(tx.error);
+      });
+    },
+    async list(prefix, shared){
+      const idb = await openDb();
+      return new Promise((resolve, reject)=>{
+        const tx = idb.transaction(STORE, 'readonly');
+        const req = tx.objectStore(STORE).getAllKeys();
+        req.onsuccess = ()=>{
+          const pfx = (shared?'shared:':'local:') + (prefix||'');
+          const stripLen = (shared?'shared:':'local:').length;
+          const keys = req.result.filter(k=>typeof k==='string' && k.startsWith(pfx)).map(k=>k.slice(stripLen));
+          resolve({ keys, prefix, shared: !!shared });
+        };
+        req.onerror = ()=> reject(req.error);
+      });
+    }
+  };
+
+  // shared=true olan kayıtlar Firestore'a gider (gerçekten paylaşımlı — farklı
+  // cihaz/kullanıcılar aynı e-postayla aynı veriyi görür). shared=false olan
+  // kayıtlar (o cihaza özel ayarlar) eskisi gibi tarayıcının IndexedDB'sinde kalır.
+  window.storage = {
+    async get(key, shared){
+      if(shared && db){
+        const snap = await db.collection('kv').doc(docIdFor(key)).get();
+        if(!snap.exists) throw new Error('Anahtar bulunamadı: '+key);
+        return { key, value: snap.data().value, shared:true };
+      }
+      return localStore.get(key, shared);
+    },
+    async set(key, value, shared){
+      if(shared && db){
+        await db.collection('kv').doc(docIdFor(key)).set({ value, updatedAt: Date.now() });
+        return { key, value, shared:true };
+      }
+      return localStore.set(key, value, shared);
+    },
+    async delete(key, shared){
+      if(shared && db){
+        await db.collection('kv').doc(docIdFor(key)).delete();
+        return { key, deleted:true, shared:true };
+      }
+      return localStore.delete(key, shared);
+    },
+    async list(prefix, shared){
+      if(shared && db){
+        let q = db.collection('kv');
+        const snap = await q.get();
+        const keys = snap.docs.map(d=>d.id).filter(k=>!prefix || k.startsWith(prefix));
+        return { keys, prefix, shared:true };
+      }
+      return localStore.list(prefix, shared);
+    }
+  };
+})();
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ---- Hesap e-postasına göre paylaşımlı depolama ----
+// Bir e-posta girildiyse tüm kayıtlar (siparişler, favoriler, dekont dosyaları,
+// pasta siparişleri ve fotoğrafları) o e-postaya özel "paylaşımlı" bir anahtarla
+// saklanır. Aynı e-posta başka bir telefon/bilgisayarda girildiğinde aynı
+// anahtarlara ulaşılır, böylece aynı liste her cihazda görünür. E-posta
+// girilmediyse eskisi gibi sadece bu cihaza özel (yerel) saklanır.
+let userEmail = '';
+function skey(key){ return userEmail ? ('acct:' + userEmail.toLowerCase() + ':' + key) : key; }
+function sshared(){ return !!userEmail; }
+async function loadUserEmail(){
+  try{ const r = await window.storage.get('account-email', false); userEmail = r ? (r.value||'') : ''; }
+  catch(e){ userEmail = ''; }
+}
+async function saveUserEmailLocal(email){
+  try{ await window.storage.set('account-email', email, false); }catch(e){}
+}
+// E-posta ilk kez kaydedildiğinde, bu cihazda zaten var olan yerel kayıtları
+// (varsa) yeni paylaşımlı anahtarlara bir kereliğine kopyalar; böylece kullanıcı
+// mevcut verisini kaybetmez.
+async function migrateLocalDataToEmail(email){
+  const pairs = [
+    ['orders-list', false], ['favorite-people', false], ['cake-orders-list', false]
+  ];
+  for(const [key] of pairs){
+    try{
+      const shared = await window.storage.get('acct:' + email.toLowerCase() + ':' + key, true).catch(()=>null);
+      if(shared && shared.value) continue; // paylaşımlı tarafta zaten veri var, üzerine yazma
+      const local = await window.storage.get(key, false).catch(()=>null);
+      if(local && local.value){
+        await window.storage.set('acct:' + email.toLowerCase() + ':' + key, local.value, true);
+      }
+    }catch(e){ /* geçiş yapılamazsa sessizce atla */ }
+  }
+}
+
+let orders = [];
+let favorites = [];
+let reviewQueue = [];
+let lastAddedId = null;
+let editingId = null;
+
+const fmtMoney = (n) => {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return new Intl.NumberFormat('tr-TR', {style:'currency', currency:'TRY'}).format(n);
+};
+const fmtDate = (iso) => {
+  if(!iso) return '—';
+  const d = new Date(iso+'T00:00:00');
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('tr-TR');
+};
+const fmtAciklama = (o) => {
+  const parts = [];
+  if(o.kapora_aciklama) parts.push('Kapora: ' + o.kapora_aciklama);
+  if(o.kalan_aciklama) parts.push('Kalan: ' + o.kalan_aciklama);
+  return parts.join(' / ') || '—';
+};
+const monthKey = (iso) => iso ? iso.slice(0,7) : null;
+const monthLabel = (key) => {
+  if(!key) return '';
+  const [y,m] = key.split('-');
+  const names = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+  return names[parseInt(m,10)-1] + ' ' + y;
+};
+const uid = () => 'o_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+// Gider kayıtları tek seferlik ödemedir (kapora/kalan ayrımı yoktur); tutar
+// girildiği an tamamlanmış sayılır. Sipariş kayıtlarında ise hem kapora hem
+// kalan tutarı girilmiş olması gerekir.
+const isOrderDone = (o) => o.kayitTuru === 'gider' ? (o.kalan_tutar != null) : (o.kapora_tutar!=null && o.kalan_tutar!=null);
+
+// ---------- storage ----------
+async function loadOrders(){
+  try{
+    const res = await window.storage.get(skey('orders-list'), sshared());
+    orders = res ? JSON.parse(res.value) : [];
+  }catch(e){ orders = []; }
+}
+async function saveOrders(){
+  try{ await window.storage.set(skey('orders-list'), JSON.stringify(orders), sshared()); }
+  catch(e){ console.error('Kayıt hatası', e); }
+}
+async function loadFavorites(){
+  try{
+    const res = await window.storage.get(skey('favorite-people'), sshared());
+    favorites = res ? JSON.parse(res.value) : [];
+  }catch(e){ favorites = []; }
+}
+async function saveFavorites(){
+  try{ await window.storage.set(skey('favorite-people'), JSON.stringify(favorites), sshared()); }
+  catch(e){ console.error('Kayıt hatası', e); }
+}
+async function saveInvoiceFile(key, mime, base64){
+  try{ await window.storage.set(skey('file:'+key), JSON.stringify({mime, base64}), sshared()); }
+  catch(e){ console.error('Dosya kaydedilemedi', e); }
+}
+async function getInvoiceFile(key){
+  try{
+    const res = await window.storage.get(skey('file:'+key), sshared());
+    return res ? JSON.parse(res.value) : null;
+  }catch(e){ return null; }
+}
+
+// ---------- Dekont No çıkarma (Belge Numarası / İşlem Ref / ETTN) ----------
+function guessFaturaNo(text){
+  // Banka e-Dekont alanları öncelikli
+  let m = text.match(/BELGE\s*NUMARASI\s*:\s*(\S+)/i);
+  if(m) return m[1].trim();
+  m = text.match(/İ?ŞLEM\s*REF\s*:\s*(\S+)/i);
+  if(m) return m[1].trim();
+  m = text.match(/ETTN\s*:\s*(\S+)/i);
+  if(m) return m[1].trim();
+  m = text.match(/SORGU\s*NO\s*:\s*(\S+)/i);
+  if(m) return m[1].trim();
+  // e-Fatura UBL formatları (geriye dönük uyumluluk)
+  m = text.match(/Fatura\s*No[:\s]+([A-Z0-9\-\/]{3,30})/i);
+  if(m) return m[1].trim();
+  m = text.match(/Invoice\s*ID[:\s]+([A-Z0-9\-\/]{3,30})/i);
+  if(m) return m[1].trim();
+  m = text.match(/cbc:ID>([^<]{3,30})</);
+  if(m) return m[1].trim();
+  m = text.match(/Seri\s*No[:\s]+([A-Z0-9\-\/]{3,30})/i);
+  if(m) return m[1].trim();
+  m = text.match(/([A-Z]{2,4}\d{8,16})/);
+  if(m) return m[1].trim();
+  return '';
+}
+
+// ---------- parsing ----------
+const BANKS = ['Ziraat Bankası','Ziraat','İş Bankası','Is Bankasi','Garanti BBVA','Garanti','Akbank',
+  'Yapı Kredi','Yapi Kredi','Halkbank','VakıfBank','Vakifbank','QNB Finansbank','QNB','Denizbank',
+  'TEB','ING Bank','ING','Şekerbank','Sekerbank','Kuveyt Türk','Albaraka','Fibabanka','Odeabank',
+  'Anadolubank','Alternatifbank','PTT'];
+
+function guessBank(text){
+  // Banka dekontunda "GÖNDEREN BANKA" (gelen ödeme) ya da "ALICI BANKA" (giden ödeme) alanı öncelikli
+  let m = text.match(/G[ÖO]NDEREN\s*BANKA\s*:\s*(.+)/i);
+  if(m) return cleanLine(m[1]);
+  m = text.match(/AL[İI]C[İI]\s*BANKA\s*:\s*(.+)/i);
+  if(m) return cleanLine(m[1]);
+  for(const b of BANKS){ if(text.toLowerCase().includes(b.toLowerCase())) return b; }
+  const iban = text.match(/TR\d{2}[\s]?(\d{4}[\s]?){5}\d{2}/);
+  return iban ? 'IBAN: '+iban[0] : '';
+}
+function guessDate(text){
+  // Banka dekontunda İŞLEM TARİHİ / VALÖR öncelikli
+  let m = text.match(/İ?ŞLEM\s*TAR[İI]H[İI]\s*:\s*(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/i);
+  if(!m) m = text.match(/VAL[ÖO]R\s*:\s*(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/i);
+  if(!m) m = text.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+  if(!m) return '';
+  const dd = m[1], mm = m[2], yyyy = m[3];
+  return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+}
+function parseAmt(raw){
+  const num = raw.replace(/\./g,'').replace(',', '.');
+  const val = parseFloat(num);
+  return isNaN(val) ? null : val;
+}
+// Anahtar kelimeyle gider (fatura/kredi kartı/kira vb. ödemesi) tespiti — tutar
+// alanında eksi işareti ya da "GİDEN/ÖDENEN" gibi net bir etiket olmasa bile,
+// dekont metninde bu ifadelerden biri geçiyorsa işlem gider sayılır.
+const EXPENSE_KEYWORDS = [
+  'kredi kartı','kredi karti','elektrik faturası','elektrik faturasi','doğalgaz','dogalgaz',
+  'su faturası','su faturasi','internet faturası','internet faturasi','telefon faturası','telefon faturasi',
+  'kira ödemesi','kira odemesi','abonelik','vergi dairesi','sgk ','bağkur','bagkur',
+  'fatura ödemesi','fatura odemesi','otomatik ödeme talimatı','otomatik odeme talimati',
+  'asgari ödeme','asgari odeme','ekstre borcu','kart borcu'
+];
+function detectExpenseByKeyword(text){
+  const t = text.toLowerCase();
+  return EXPENSE_KEYWORDS.some(k=>t.includes(k));
+}
+function detectAmountInfo(text){
+  // Etiketinden bağımsız olarak HER ZAMAN giden bir ödemeye işaret eden alanlar
+  // (işaret olmasa bile bunlar gider olarak kabul edilir).
+  const alwaysExpensePatterns = [
+    /G[İI]DEN\s*FAST\s*TUTARI\s*:\s*(-?[\d.,]+)/i,
+    /G[ÖO]NDER[İI]LEN\s*TUTAR\s*:\s*(-?[\d.,]+)/i,
+    /[ÖO]DENEN\s*TUTAR\s*:\s*(-?[\d.,]+)/i,
+    /KART\s*EKSTRES[İI]?\s*(?:BORCU|TUTARI)?\s*:\s*(-?[\d.,]+)/i,
+    /ASGAR[İI]\s*[ÖO]DEME\s*TUTARI\s*:\s*(-?[\d.,]+)/i,
+    /[ÖO]DEME\s*TUTARI\s*:\s*(-?[\d.,]+)/i
+  ];
+  for(const p of alwaysExpensePatterns){
+    const m = text.match(p);
+    if(m){
+      const val = parseAmt(m[1]);
+      if(val!=null) return { tutar: Math.abs(val), isExpense: true };
+    }
+  }
+  // İşaretine (eksi/artı) göre gider ya da gelir olduğu belirlenen alanlar
+  const primaryPatterns = [
+    /İ?ŞLEM\s*TUTARI\s*:\s*(-?[\d.,]+)/i,
+    /ISLEM\s*TUTARI\s*:\s*(-?[\d.,]+)/i,
+    /HAVALE\s*NET\s*TUTARI\s*:\s*(-?[\d.,]+)/i
+  ];
+  for(const p of primaryPatterns){
+    const m = text.match(p);
+    if(m){
+      const val = parseAmt(m[1]);
+      if(val!=null) return { tutar: Math.abs(val), isExpense: m[1].trim().startsWith('-') || detectExpenseByKeyword(text) };
+    }
+  }
+  const patterns = [/ödenecek tutar[^0-9]{0,15}([\d.,]+)/i, /genel toplam[^0-9]{0,15}([\d.,]+)/i,
+    /toplam tutar[^0-9]{0,15}([\d.,]+)/i, /toplam[^0-9]{0,15}([\d.,]+)\s*(TL|₺|TRY)/i];
+  for(const p of patterns){
+    const m2 = text.match(p);
+    if(m2){
+      const val = parseAmt(m2[1]);
+      if(val!=null) return { tutar: val, isExpense: detectExpenseByKeyword(text) };
+    }
+  }
+  return { tutar: null, isExpense: detectExpenseByKeyword(text) };
+}
+function guessAmount(text){
+  return detectAmountInfo(text).tutar;
+}
+function guessPerson(text, filename, isExpense){
+  if(isExpense){
+    // Giden bir ödemede (gider) "GÖNDEREN ADI" her zaman hesap sahibinin
+    // kendisidir — bizi ilgilendiren, parayı kime ödediğimiz (ALICI ADI /
+    // ALACAKLI ADI). Kredi kartı otomatik ödemelerinde isim alanı hiç
+    // olmayabilir, o zaman kart no'ya göre etiketleriz.
+    let m = text.match(/AL[İI]C[İI]\s*ADI\s*:\s*(.+)/i);
+    if(m) return cleanLine(m[1]);
+    m = text.match(/ALACAKLI\s*ADI\s*:\s*(.+)/i);
+    if(m) return cleanLine(m[1]);
+    if(/KRED[İI]\s*KART\s*NO\s*:/i.test(text)) return 'Kredi Kartı Otomatik Ödeme';
+    m = text.match(/G[ÖO]NDEREN\s*ADI\s*:\s*(.+)/i);
+    if(m) return cleanLine(m[1]);
+  }
+  // Banka dekontunda GÖNDEREN ADI (gelen ödeme) ya da ALICI ADI (giden ödeme) öncelikli
+  let m = text.match(/G[ÖO]NDEREN\s*ADI\s*:\s*(.+)/i);
+  if(m) return cleanLine(m[1]);
+  m = text.match(/AL[İI]C[İI]\s*ADI\s*:\s*(.+)/i);
+  if(m) return cleanLine(m[1]);
+  m = text.match(/ALACAKLI\s*ADI\s*:\s*(.+)/i);
+  if(m) return cleanLine(m[1]);
+  m = text.match(/HAVALEY[İI]\s*G[ÖO]NDEREN\s*:\s*(.+)/i);
+  if(m) return cleanLine(m[1]);
+  m = text.match(/Sayın[:\s]+([A-ZÇĞİÖŞÜa-zçğıöşü\s]{3,40})/);
+  if(m) return m[1].trim().split('\n')[0].trim();
+  m = text.match(/Alıcı[^:]{0,20}:\s*([A-ZÇĞİÖŞÜa-zçğıöşü\s]{3,40})/);
+  if(m) return m[1].trim();
+  if(/KRED[İI]\s*KART\s*NO\s*:/i.test(text)) return 'Kredi Kartı Otomatik Ödeme';
+  return filename.replace(/\.[^.]+$/, '').replace(/[_-]/g,' ');
+}
+function guessAciklama(text, isExpense){
+  const m = text.match(/A[ÇC]IKLAMA\s*:\s*(.+)/i);
+  if(!m) return '';
+  const val = cleanLine(m[1]);
+  if(!val || val === '-') return '';
+  // Gider kayıtlarında bankanın "standart" notu (ör. kira adresi, ücret
+  // sebebi) genelde işlemle ilgili tek bilgi kaynağıdır — bu yüzden
+  // gelirdeki gibi eleme; sadece gelir (müşteri siparişi) tarafında eleriz.
+  if(!isExpense && isStandardBankAciklama(val)) return '';
+  return val;
+}
+// Bankanın otomatik oluşturduğu, hesap sahibinin kendisinin yazmadığı
+// standart açıklama kalıplarını eler (gelen/giden havale otomatik notu,
+// kart borcu otomatik ödeme notu, EFT/FAST ücret kesintisi notu vb.).
+// Bunlar müşteri siparişiyle ilgili bilgi taşımadığı için listede gösterilmez.
+function isStandardBankAciklama(val){
+  const patterns = [
+    /^GELEN\s+HAVALE\b/i,
+    /^G[İI]DEN\s+HAVALE\b/i,
+    /^HAVALE\s+[ÜU]CRET[İI]/i,
+    /OTOMAT[İI]K\s*[ÖO]DEME/i,
+    /^ELEKTRON[İI]K\s+FON\s+TRANSFER[İI]/i,
+    /^EFT\s*[ÜU]CRET[İI]/i,
+    /^FAST\s*[ÜU]CRET[İI]/i,
+    /^\d{4,6}\*{2,}\d{2,6}\s/i // maskelenmiş kart no ile başlayan otomatik notlar
+  ];
+  return patterns.some(p => p.test(val.trim()));
+}
+// Aynı satırda birden fazla "ETİKET : değer" olduğunda, değeri bir sonraki
+// bilinen etikete ya da satır sonuna kadar kırpar; tek başına ise olduğu
+// gibi döner.
+const KNOWN_DEKONT_LABELS = [
+  'ÖDEMENİN KAYNAĞI','MESAJ TÜRÜ','SORGU NO','KOLAY ADRES','VERGİ','KOMİSYON',
+  'TOPLAM TAHSILAT TUTARI','BELGE NUMARASI','BELGE TARİHİ','SENARYO','ETTN',
+  'PERSONEL SİCİL','SIRA NO/ID','İŞLEM REF','ALICI BANKA','ALICI ŞUBE',
+  'ALICI HESAP','ALICI ADI','ALICI TCKN/VD/VKN','ÖDEME TÜRÜ','DÖVİZ CİNSİ',
+  'GÖNDEREN ŞUBE','HESAP NUMARASI','KOMİSYON TUTARI','VERGİ/FON','NET TUTAR'
+];
+function cleanLine(raw){
+  let val = raw.trim();
+  let cutIdx = -1;
+  for(const label of KNOWN_DEKONT_LABELS){
+    const pattern = new RegExp('\\s+' + label.split(' ').join('\\s+') + '\\s*:', 'i');
+    const m = pattern.exec(val);
+    if(m && (cutIdx === -1 || m.index < cutIdx)) cutIdx = m.index;
+  }
+  if(cutIdx > 0) val = val.slice(0, cutIdx).trim();
+  return val.replace(/\s{2,}/g,' ').trim();
+}
+function detectType(text){
+  const t = text.toLowerCase();
+  if(t.includes('kapora') || t.includes('ön ödeme') || t.includes('avans')) return 'kapora';
+  if(t.includes('kalan') || t.includes('bakiye')) return 'kalan';
+  return null;
+}
+function parseInvoiceText(text, filename){
+  const detected = detectType(text);
+  const amountInfo = detectAmountInfo(text);
+  return {
+    kisi: guessPerson(text, filename, amountInfo.isExpense),
+    banka: guessBank(text),
+    tarih: guessDate(text),
+    tutar: amountInfo.tutar,
+    isExpense: amountInfo.isExpense,
+    aciklama: guessAciklama(text, amountInfo.isExpense),
+    tur: detected || 'tam',
+    turExplicit: !!detected,
+    faturaNo: guessFaturaNo(text)
+  };
+}
+
+// ---------- e-Fatura / e-Arşiv (UBL-TR XML) ----------
+function tagText(scope, tagName){
+  const els = scope.getElementsByTagName(tagName);
+  return els.length ? (els[0].textContent || '').trim() : '';
+}
+function directChildText(parent, tagName){
+  for(const child of parent.children){
+    if(child.tagName === tagName) return (child.textContent||'').trim();
+  }
+  return '';
+}
+function parseUblXml(xmlText){
+  let doc;
+  try{ doc = new DOMParser().parseFromString(xmlText, 'application/xml'); }
+  catch(e){ return null; }
+  if(!doc || !doc.documentElement || doc.getElementsByTagName('parsererror').length) return null;
+
+  const root = doc.documentElement;
+  const faturaNo = directChildText(root, 'cbc:ID');
+  const tarih = tagText(root, 'cbc:IssueDate');
+  let tutar = tagText(root, 'cbc:PayableAmount') || tagText(root, 'cbc:TaxInclusiveAmount');
+  tutar = tutar ? parseFloat(tutar.replace(',', '.')) : null;
+
+  let kisi = '';
+  const custParty = root.getElementsByTagName('cac:AccountingCustomerParty')[0];
+  if(custParty){
+    const person = custParty.getElementsByTagName('cac:Person')[0];
+    if(person){
+      const fn = tagText(person, 'cbc:FirstName');
+      const ln = tagText(person, 'cbc:FamilyName');
+      kisi = (fn + ' ' + ln).trim();
+    }
+    if(!kisi){
+      const legal = custParty.getElementsByTagName('cac:PartyLegalEntity')[0];
+      if(legal) kisi = tagText(legal, 'cbc:RegistrationName');
+    }
+  }
+
+  let banka = '';
+  const finAcc = root.getElementsByTagName('cac:PayeeFinancialAccount')[0];
+  if(finAcc){
+    const iban = tagText(finAcc, 'cbc:ID');
+    if(iban) banka = 'IBAN: ' + iban;
+  }
+  const finBranch = root.getElementsByTagName('cac:FinancialInstitutionBranch')[0];
+  if(finBranch){
+    const bname = tagText(finBranch, 'cbc:Name');
+    if(bname) banka = bname + (banka ? ' — ' + banka : '');
+  }
+
+  const notes = Array.from(root.getElementsByTagName('cbc:Note')).map(n=>n.textContent).join(' ');
+  const itemNames = Array.from(root.getElementsByTagName('cbc:Name')).map(n=>n.textContent).join(' ');
+  const detected = detectType(notes + ' ' + itemNames);
+
+  return {
+    kisi: kisi || '', banka, tarih: tarih || '', tutar, aciklama: (notes||'').trim(),
+    tur: detected || 'tam', turExplicit: !!detected, faturaNo: faturaNo || '',
+    rawText: `Fatura No: ${faturaNo}\nTarih: ${tarih}\nTutar: ${tutar}\nAlıcı: ${kisi}\nKalemler: ${itemNames}\nNot: ${notes}`
+  };
+}
+function extractHtmlText(htmlText){
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  return doc.body ? doc.body.textContent.replace(/\s+/g,' ').trim() : '';
+}
+
+// ---------- file extraction ----------
+async function extractPdfText(arrayBuffer){
+  const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+  let text = '';
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Banka dekontları genelde çok sütunlu tablo düzeninde; satırları Y
+    // konumuna göre ayırmak "ETİKET : değer" alanlarını doğru okumamızı sağlar.
+    let lastY = null;
+    for(const item of content.items){
+      const y = item.transform ? item.transform[5] : null;
+      if(lastY !== null && y !== null && Math.abs(y - lastY) > 2){
+        text += '\n';
+      } else if(text && !text.endsWith('\n')){
+        text += ' ';
+      }
+      text += item.str;
+      if(y !== null) lastY = y;
+    }
+    text += '\n';
+  }
+  return text;
+}
+async function extractImageText(blob){
+  try{
+    const { data } = await Tesseract.recognize(blob, 'tur');
+    return data.text;
+  }catch(e){
+    return '';
+  }
+}
+
+async function readAsText(x){ return x.async ? x.async('text') : x.text(); }
+async function readAsArrayBuffer(x){ return x.async ? x.async('arraybuffer') : x.arrayBuffer(); }
+async function readAsBlob(x){ return x.async ? x.async('blob') : x; }
+async function readAsBase64(x){
+  if(x.async) return x.async('base64');
+  const buf = await x.arrayBuffer();
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  for(let i=0;i<bytes.byteLength;i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function setStatus(msg, isError=false){
+  const el = document.getElementById('statusLine');
+  el.textContent = msg;
+  el.classList.toggle('error', isError);
+}
+function setProgress(pct){
+  const bar = document.getElementById('progressBar');
+  const fill = document.getElementById('progressFill');
+  if(pct === null){ bar.classList.remove('active'); return; }
+  bar.classList.add('active');
+  fill.style.width = pct + '%';
+}
+
+let pairLinks = {};
+
+// ---------- Duplicate detection ----------
+function isDuplicateFaturaNo(faturaNo, excludeId){
+  if(!faturaNo) return false;
+  const clean = faturaNo.trim().toUpperCase();
+  // Check existing orders (excludeId burada bir sipariş id'si ise, o siparişin kendisi hariç tutulur)
+  if(orders.some(o => o.id !== excludeId && ((o.kapora_faturaNo||'').trim().toUpperCase() === clean || (o.kalan_faturaNo||'').trim().toUpperCase() === clean))) return true;
+  // Check review queue (kaydedilmekte olan kaydın kendisi hariç)
+  if(reviewQueue.some(r => r.id !== excludeId && (r.faturaNo||'').trim().toUpperCase() === clean)) return true;
+  return false;
+}
+
+// ---------- Toplu dekont: tek dosyada birden çok işlem ----------
+// Bazı bankalar (ör. Yapı Kredi) bir PDF/HTML içine onlarca ayrı e-Dekont
+// işlemini art arda koyabiliyor. Her işlem bloğu "MÜŞTERİ NO :" satırıyla
+// başladığı için, metni bu satırdan böleriz.
+function splitDekontBlocks(text){
+  if(!text) return [text || ''];
+  const re = /(?=M[ÜU]ŞTER[İI]\s*NO\s*:)/gi;
+  const parts = text.split(re).map(s=>s.trim()).filter(Boolean);
+  return parts.length ? parts : [text];
+}
+
+async function processGroup(g){
+  let mime = '', base64 = '', filename = '', fullText = '', blocks = [];
+  let isUbl = false, ublParsed = null;
+  try{
+    if(g.xml){
+      const xmlText = await readAsText(g.xml);
+      ublParsed = parseUblXml(xmlText);
+      isUbl = true;
+      filename = g.xml.name;
+      if(g.html){ base64 = await readAsBase64(g.html); mime = 'text/html'; filename = g.html.name; }
+      else { base64 = await readAsBase64(g.xml); mime = 'application/xml'; }
+    }else if(g.pdf){
+      const arrayBuffer = await readAsArrayBuffer(g.pdf);
+      fullText = await extractPdfText(arrayBuffer);
+      base64 = await readAsBase64(g.pdf); mime = 'application/pdf'; filename = g.pdf.name;
+      blocks = splitDekontBlocks(fullText);
+    }else if(g.html){
+      const htmlRaw = await readAsText(g.html);
+      fullText = extractHtmlText(htmlRaw);
+      base64 = await readAsBase64(g.html); mime = 'text/html'; filename = g.html.name;
+      blocks = splitDekontBlocks(fullText);
+    }else if(g.img){
+      const blob = await readAsBlob(g.img);
+      fullText = await extractImageText(blob);
+      const ext = g.img.name.split('.').pop().toLowerCase();
+      base64 = await readAsBase64(g.img); mime = 'image/'+(ext==='jpg'?'jpeg':ext); filename = g.img.name;
+      blocks = splitDekontBlocks(fullText);
+    }
+  }catch(e){ /* aşağıda boş sonuç dönülecek */ }
+
+  if(isUbl){
+    const parsed = ublParsed || { kisi:'', banka:'', tarih:'', tutar:null, aciklama:'', tur:'tam', turExplicit:false, faturaNo:'', rawText:'' };
+    return [{
+      id: uid(), filename, mime, base64,
+      rawText: parsed.rawText || '',
+      kisi: parsed.kisi || '', banka: parsed.banka || '', tarih: parsed.tarih || '', tutar: parsed.tutar,
+      aciklama: parsed.aciklama || '',
+      tur: parsed.tur || 'tam', _typeExplicit: !!parsed.turExplicit,
+      faturaNo: parsed.faturaNo || '',
+      isExpense: false,
+      isDuplicate: false
+    }];
+  }
+
+  if(blocks.length === 0) blocks = [''];
+  const multi = blocks.length > 1;
+  return blocks.map((blockText, idx) => {
+    const parsed = parseInvoiceText(blockText || '', filename);
+    return {
+      id: uid(),
+      filename: multi ? `${filename} — İşlem ${idx+1}/${blocks.length}` : filename,
+      mime, base64,
+      rawText: blockText || '',
+      kisi: parsed.kisi || '', banka: parsed.banka || '', tarih: parsed.tarih || '', tutar: parsed.tutar,
+      aciklama: parsed.aciklama || '',
+      tur: parsed.tur || 'tam', _typeExplicit: !!parsed.turExplicit,
+      faturaNo: parsed.faturaNo || '',
+      isExpense: !!parsed.isExpense,
+      kayitTuru: parsed.isExpense ? 'gider' : 'siparis',
+      isDuplicate: false // will be set later
+    };
+  });
+}
+
+// Aynı yüklemede aynı kişiye ait 2 işlem varsa kapora/kalan olarak eşleştirir.
+function pairSameBatchItems(items){
+  const byName = {};
+  items.forEach(it=>{
+    if(it.isExpense) return; // gider kayıtları müşteri sipariş eşleşmesine girmez
+    const key = (it.kisi||'').trim().toLowerCase();
+    if(!key) return;
+    (byName[key] = byName[key] || []).push(it);
+  });
+  Object.values(byName).forEach(group=>{
+    if(group.length >= 2){
+      group.sort((a,b)=> (a.tarih||'').localeCompare(b.tarih||''));
+      const pairId = uid();
+      if(!group[0]._typeExplicit) group[0].tur = 'kapora';
+      if(!group[1]._typeExplicit) group[1].tur = 'kalan';
+      group[0]._pairId = pairId;
+      group[1]._pairId = pairId;
+    }
+  });
+}
+// Aynı kişiye ait, kaporası alınmış ama kalanı bekleyen açık bir sipariş
+// varsa, bu işlemi o siparişe kalan ödeme olarak bağlanmak üzere önerir.
+function suggestOpenOrders(items, ignorePairId){
+  items.forEach(it=>{
+    if(it.isExpense) return; // gider kayıtları mevcut bir müşteri siparişine bağlanmaz
+    if(!ignorePairId && it._pairId) return;
+    if(it._suggestedTarget) return;
+    const key = (it.kisi||'').trim().toLowerCase();
+    if(!key) return;
+    const openOrder = orders.find(o => (o.kisi||'').trim().toLowerCase()===key && o.kapora_tutar!=null && o.kalan_tutar==null);
+    if(openOrder){
+      it._suggestedTarget = openOrder.id;
+      if(!it._typeExplicit) it.tur = 'kalan';
+    }
+  });
+}
+function autoClassifyQueue(newItems){
+  pairSameBatchItems(newItems);
+  suggestOpenOrders(newItems, false);
+}
+
+// Otomatik ekleme için bir işlemin sorunsuz olup olmadığını kontrol eder.
+// Sorun varsa, sebebini listeleyip döner; boş dizi = sorunsuz, otomatik eklenebilir.
+// Gider (hesaptan çıkan ödeme) kayıtlarında kişi/tarih bankanın dekontunda
+// farklı bir etikette geçebiliyor ve müşteri sipariş takibiyle ilgili
+// olmadığından, bu iki alan eksikse otomatik tamamlanır — sırf bu yüzden
+// onay bekleme kuyruğuna düşmez. Sadece tutar gerçekten okunamazsa ya da
+// aynı dekont numarası tekrarlıyorsa gözden geçirmeye gider.
+function evaluateItem(item){
+  const reasons = [];
+  if(item.tutar==null || isNaN(item.tutar) || item.tutar<=0) reasons.push('Tutar tespit edilemedi');
+  if(item.isDuplicate) reasons.push(`Bu dekont numarası ile zaten kayıtlı bir sipariş var (${item.faturaNo||'—'})`);
+  if(item.isExpense){
+    if(!item.kisi) item.kisi = 'Bilinmeyen Alıcı (dekonttan okunamadı)';
+    if(!item.tarih) item.tarih = new Date().toISOString().slice(0,10);
+  } else {
+    if(!item.kisi) reasons.push('Kişi / gönderen adı tespit edilemedi');
+    if(!item.tarih) reasons.push('Tarih tespit edilemedi');
+  }
+  return reasons;
+}
+
+// Sorunsuz bulunan işlemleri onay beklemeden doğrudan sipariş listesine ekler.
+// Aynı yüklemede eşleşen kapora/kalan çiftleri tek siparişte birleştirilir;
+// açık bir siparişi olan kişiler için kalan ödeme o siparişe eklenir.
+async function autoCommitOkItems(okItems){
+  const committedIds = new Set();
+  const pairGroups = {};
+  okItems.forEach(it=>{ if(it._pairId) (pairGroups[it._pairId] = pairGroups[it._pairId] || []).push(it); });
+
+  for(const pid in pairGroups){
+    const group = pairGroups[pid];
+    if(group.length < 2) continue; // eşin biri elenmiş, aşağıda tekil işlenecek
+    group.sort((a,b)=> (a.tarih||'').localeCompare(b.tarih||''));
+    let targetId = '__new__';
+    for(const it of group){
+      const order = await commitInvoice({
+        kisi: it.kisi, faturaNo: it.faturaNo, banka: it.banka, tutar: it.tutar, tarih: it.tarih,
+        aciklama: it.aciklama, tur: it.tur, target: targetId,
+        mime: it.mime, base64: it.base64, filename: it.filename
+      });
+      if(order){ targetId = order.id; lastAddedId = order.id; }
+      committedIds.add(it.id);
+    }
+  }
+
+  for(const it of okItems){
+    if(committedIds.has(it.id)) continue;
+    const target = (it._suggestedTarget && orders.some(o=>o.id===it._suggestedTarget)) ? it._suggestedTarget : '__new__';
+    const order = await commitInvoice({
+      kisi: it.kisi, faturaNo: it.faturaNo, banka: it.banka, tutar: it.tutar, tarih: it.tarih,
+      aciklama: it.aciklama, tur: it.isExpense ? 'tam' : it.tur, target,
+      mime: it.mime, base64: it.base64, filename: it.filename,
+      kayitTuru: it.isExpense ? 'gider' : 'siparis'
+    });
+    if(order) lastAddedId = order.id;
+    committedIds.add(it.id);
+  }
+  return committedIds.size;
+}
+
+async function handleFiles(fileList){
+  const files = Array.from(fileList || []);
+  if(files.length === 0) return;
+  setStatus('Dosyalar okunuyor…');
+  setProgress(5);
+
+  const allGroups = [];
+  for(const file of files){
+    if(/\.zip$/i.test(file.name)){
+      let zip;
+      try{ zip = await JSZip.loadAsync(file); } catch(e){ continue; }
+      const entries = Object.values(zip.files).filter(f=>!f.dir);
+      const groups = {};
+      for(const entry of entries){
+        const m = entry.name.match(/\.([a-z0-9]+)$/i);
+        if(!m) continue;
+        const ext = m[1].toLowerCase();
+        if(!['xml','html','htm','pdf','jpg','jpeg','png'].includes(ext)) continue;
+        const base = entry.name.replace(/\.[^.]+$/, '');
+        groups[base] = groups[base] || {};
+        if(ext==='xml') groups[base].xml = entry;
+        else if(ext==='html'||ext==='htm') groups[base].html = entry;
+        else if(ext==='pdf') groups[base].pdf = entry;
+        else groups[base].img = entry;
+      }
+      Object.values(groups).forEach(g=>allGroups.push(g));
+    }else{
+      const m = file.name.match(/\.([a-z0-9]+)$/i);
+      const ext = m ? m[1].toLowerCase() : '';
+      const g = {};
+      if(ext==='xml') g.xml = file;
+      else if(ext==='html'||ext==='htm') g.html = file;
+      else if(ext==='pdf') g.pdf = file;
+      else if(['jpg','jpeg','png'].includes(ext)) g.img = file;
+      else continue;
+      allGroups.push(g);
+    }
+  }
+
+  if(allGroups.length === 0){
+    setStatus('Seçilen dosyalarda desteklenen bir banka dekontu bulunamadı.');
+    setProgress(null);
+    return;
+  }
+
+  const newItems = [];
+  let duplicateCount = 0;
+  const seenInBatch = new Set();
+  for(let i=0;i<allGroups.length;i++){
+    setStatus(`Okunuyor (${i+1}/${allGroups.length})…`);
+    setProgress(10 + Math.round((i/allGroups.length)*85));
+    const items = await processGroup(allGroups[i]);
+
+    for(const item of items){
+      const clean = (item.faturaNo||'').trim().toUpperCase();
+      // Check for duplicate dekont no (mevcut siparişlerde, önceki yüklemede ya da bu yüklemenin kendi içinde)
+      if(clean && (isDuplicateFaturaNo(item.faturaNo) || seenInBatch.has(clean))){
+        item.isDuplicate = true;
+        duplicateCount++;
+      }
+      if(clean) seenInBatch.add(clean);
+      newItems.push(item);
+    }
+  }
+  
+  // Sadece bu yükleme içinde daha önce kayıtlı olduğu tespit edilenleri ayır;
+  // geri kalanları sorunsuz/sorunlu diye ikiye böleriz.
+  const validItems = newItems.filter(it => !it.isDuplicate);
+  const duplicateItems = newItems.filter(it => it.isDuplicate);
+  autoClassifyQueue(validItems);
+
+  const okItems = [];
+  const reviewItems = [];
+  validItems.forEach(it=>{
+    const reasons = evaluateItem(it);
+    if(reasons.length === 0){ okItems.push(it); }
+    else { it._reason = reasons.join(' · '); reviewItems.push(it); }
+  });
+  // Tekrarlanan dekontlar (aynı belge no ile zaten listede olan) onayınıza
+  // sunulmaz — bunlar zaten eklenmiş bir kaydın tekrarıdır, otomatik
+  // atlanır ve sadece durum mesajında sayısı belirtilir.
+
+  const addedCount = await autoCommitOkItems(okItems);
+  // Otomatik eklemeler tamamlandıktan sonra, gözden geçirmeyi bekleyen yarım
+  // kalan eşleşmeler (ör. çiftin biri sorunlu) için açık sipariş önerisini
+  // güncel sipariş listesine göre tekrar hesapla.
+  suggestOpenOrders(reviewItems, true);
+  reviewQueue.push(...reviewItems);
+
+  let statusMsg = addedCount > 0 ? `${addedCount} işlem otomatik listeye eklendi.` : 'Otomatik eklenecek işlem bulunamadı.';
+  if(duplicateItems.length > 0){
+    statusMsg += ` ${duplicateItems.length} kayıt zaten listede olduğu için atlandı.`;
+  }
+  if(reviewItems.length > 0){
+    statusMsg += ` ${reviewItems.length} işlem gözden geçirmenizi bekliyor.`;
+  }
+  setStatus(statusMsg, reviewItems.length > 0);
+  setProgress(100);
+  setTimeout(()=>setProgress(null), 800);
+  renderOrders();
+  renderReviewQueue();
+}
+
+// ---------- review queue UI ----------
+function renderReviewQueue(){
+  const section = document.getElementById('reviewSection');
+  const list = document.getElementById('reviewList');
+  if(reviewQueue.length === 0){ section.style.display='none'; list.innerHTML=''; return; }
+  section.style.display='block';
+
+  list.innerHTML = reviewQueue.map(item => {
+    const preselect = (item._pairId && pairLinks[item._pairId]) ? pairLinks[item._pairId]
+                     : (item._suggestedTarget || '__new__');
+    const reasonNote = item._reason
+      ? `<div class="note error"><strong>⚠️ Otomatik eklenemedi:</strong> ${escapeHtml(item._reason)} — Alanları düzeltip Kaydet'e basın ya da Yoksay'a basarak atlayın.</div>`
+      : '';
+    const autoNote = item._pairId
+      ? `<div class="note">Bu kişi için aynı yüklemede 2 ödeme bulundu — ilk tarih kapora, ikincisi kalan ödeme olarak otomatik işaretlendi. Gerekirse düzeltin.</div>`
+      : (item._suggestedTarget ? `<div class="note">Bu kişinin açık (kaporası alınmış, kalanı bekleyen) bir siparişi bulundu — kalan ödeme olarak o siparişe bağlanacak şekilde önerildi.</div>` : '');
+    const expenseNote = item.isExpense
+      ? `<div class="note">Bu, hesabınızdan çıkan bir <strong>giden ödeme</strong> gibi görünüyor — kayıt türü otomatik olarak "Gider" seçildi. Yanlışsa aşağıdan değiştirebilirsiniz.</div>`
+      : '';
+    const kayitTuru = item.kayitTuru || (item.isExpense ? 'gider' : 'siparis');
+    const isGider = kayitTuru === 'gider';
+    return `
+    <div class="review-card ${item.isDuplicate?'duplicate':''}" data-id="${item.id}">
+      <div class="fname">${item.filename}${item.faturaNo ? ` · <span style="color:var(--ink)">Dekont No: ${escapeHtml(item.faturaNo)}</span>` : ''}</div>
+      ${reasonNote}
+      ${expenseNote}
+      ${autoNote}
+      <div class="field-grid">
+        <div><label>Kayıt Türü</label>
+          <select class="f-kayit-turu">
+            <option value="siparis" ${!isGider?'selected':''}>Sipariş (Gelir)</option>
+            <option value="gider" ${isGider?'selected':''}>Gider</option>
+          </select>
+        </div>
+        <div><label>Kişi</label><input type="text" class="f-kisi" value="${escapeAttr(item.kisi||'')}"></div>
+        <div><label>Dekont No</label><input type="text" class="f-fatura-no" value="${escapeAttr(item.faturaNo||'')}" placeholder="Belge No / İşlem Ref"></div>
+        <div><label>Banka</label><input type="text" class="f-banka" value="${escapeAttr(item.banka||'')}"></div>
+        <div><label>Tutar (₺)</label><input type="number" step="0.01" class="f-tutar" value="${item.tutar ?? ''}"></div>
+        <div><label>Tarih</label><input type="date" class="f-tarih" value="${item.tarih||''}"></div>
+        <div class="f-tur-wrap" style="${isGider?'display:none;':''}"><label>Tür</label>
+          <select class="f-tur">
+            <option value="kapora" ${item.tur==='kapora'?'selected':''}>Kapora</option>
+            <option value="kalan" ${item.tur==='kalan'?'selected':''}>Kalan Ödeme</option>
+            <option value="tam" ${item.tur==='tam'?'selected':''}>Tek Seferde / Tam Ödeme</option>
+          </select>
+        </div>
+        <div class="f-target-wrap" style="${isGider?'display:none;':''}"><label>Sipariş</label>
+          <select class="f-target">
+            <option value="__new__" ${preselect==='__new__'?'selected':''}>Yeni sipariş oluştur</option>
+            ${orders.filter(o=>o.kayitTuru!=='gider').map(o=>{
+              const noParts = [o.kapora_faturaNo?('K: '+o.kapora_faturaNo):'', o.kalan_faturaNo?('Kl: '+o.kalan_faturaNo):''].filter(Boolean).join(' / ');
+              return `<option value="${o.id}" ${preselect===o.id?'selected':''}>${escapeAttr(o.kisi)}${noParts?' · '+escapeAttr(noParts):''} — ${o.toplam?fmtMoney(o.toplam):'(açık)'}</option>`;
+            }).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label>Açıklama</label>
+        <input type="text" class="f-aciklama" value="${escapeAttr(item.aciklama||'')}" placeholder="Dekont açıklaması (örn. Düğün pastası kapora Destina Kotan)">
+      </div>
+      <button class="ocr-toggle" type="button">Okunan metni göster</button>
+      <div class="ocr-text">${escapeHtml((item.rawText||'').slice(0,2000)) || '(metin okunamadı — alanları elle girin)'}</div>
+      <div class="row-actions">
+        <button class="btn wine small btn-save" ${item.isDuplicate?'disabled':''}>Kaydet</button>
+        <button class="btn secondary small btn-discard">Yoksay</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  list.querySelectorAll('.ocr-toggle').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const box = btn.nextElementSibling;
+      box.classList.toggle('open');
+      btn.textContent = box.classList.contains('open') ? 'Okunan metni gizle' : 'Okunan metni göster';
+    });
+  });
+  list.querySelectorAll('.f-kayit-turu').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const cardEl = sel.closest('.review-card');
+      const isGider = sel.value === 'gider';
+      cardEl.querySelector('.f-tur-wrap').style.display = isGider ? 'none' : '';
+      cardEl.querySelector('.f-target-wrap').style.display = isGider ? 'none' : '';
+    });
+  });
+  list.querySelectorAll('.btn-discard').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      const cardEl = e.target.closest('.review-card');
+      const id = cardEl.dataset.id;
+      reviewQueue = reviewQueue.filter(r=>r.id!==id);
+      renderReviewQueue();
+    });
+  });
+  list.querySelectorAll('.btn-save').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const cardEl = e.target.closest('.review-card');
+      const id = cardEl.dataset.id;
+      const item = reviewQueue.find(r=>r.id===id);
+      const kayitTuru = cardEl.querySelector('.f-kayit-turu').value;
+      const isGider = kayitTuru === 'gider';
+      const kisi = cardEl.querySelector('.f-kisi').value.trim();
+      const faturaNo = cardEl.querySelector('.f-fatura-no').value.trim();
+      const banka = cardEl.querySelector('.f-banka').value.trim();
+      const tutar = parseFloat(cardEl.querySelector('.f-tutar').value) || null;
+      const tarih = cardEl.querySelector('.f-tarih').value;
+      const tur = isGider ? 'tam' : cardEl.querySelector('.f-tur').value;
+      const target = isGider ? '__new__' : cardEl.querySelector('.f-target').value;
+      const aciklama = cardEl.querySelector('.f-aciklama').value.trim();
+
+      // Final duplicate check at save time (kendi kaydı hariç)
+      if(faturaNo && isDuplicateFaturaNo(faturaNo, id)){
+        alert('Bu dekont numarası ile zaten kayıtlı bir sipariş var. Lütfen dekont numarasını kontrol edin.');
+        return;
+      }
+
+      btn.disabled = true; btn.textContent = 'Kaydediliyor…';
+      const order = await commitInvoice({kisi,faturaNo,banka,tutar,tarih,aciklama,tur,target,mime:item.mime,base64:item.base64,filename:item.filename,kayitTuru});
+      if(!isGider && item._pairId && order) pairLinks[item._pairId] = order.id;
+      reviewQueue = reviewQueue.filter(r=>r.id!==id);
+      lastAddedId = order ? order.id : null;
+      renderReviewQueue();
+      renderOrders();
+    });
+  });
+}
+
+async function commitInvoice({kisi,faturaNo,banka,tutar,tarih,aciklama,tur,target,mime,base64,filename,kayitTuru}){
+  let order;
+  if(target === '__new__'){
+    order = { id: uid(), kisi, banka, kayitTuru: kayitTuru || 'siparis',
+      kapora_tutar:null, kapora_tarih:null, kapora_aciklama:'', kapora_faturaNo:'',
+      kalan_tutar:null, kalan_tarih:null, kalan_aciklama:'', kalan_faturaNo:'',
+      toplam:null, dosyalar:{} };
+    orders.push(order);
+  }else{
+    order = orders.find(o=>o.id===target);
+  }
+  if(!order) return null;
+
+  if(tur === 'kapora'){
+    order.kapora_tutar = tutar; order.kapora_tarih = tarih; order.kapora_aciklama = aciklama || '';
+    if(faturaNo) order.kapora_faturaNo = faturaNo;
+    order.dosyalar.kapora = filename;
+    if(mime && base64) await saveInvoiceFile(order.id+':kapora', mime, base64);
+  }else if(tur === 'kalan'){
+    order.kalan_tutar = tutar; order.kalan_tarih = tarih; order.kalan_aciklama = aciklama || '';
+    if(faturaNo) order.kalan_faturaNo = faturaNo;
+    order.dosyalar.kalan = filename;
+    if(mime && base64) await saveInvoiceFile(order.id+':kalan', mime, base64);
+  }else{
+    order.kalan_tutar = tutar; order.kalan_tarih = tarih; order.kalan_aciklama = aciklama || '';
+    if(faturaNo) order.kalan_faturaNo = faturaNo;
+    order.dosyalar.tam = filename;
+    if(mime && base64) await saveInvoiceFile(order.id+':tam', mime, base64);
+  }
+  if(banka) order.banka = banka;
+  order.toplam = (order.kapora_tutar||0) + (order.kalan_tutar||0) || null;
+  await saveOrders();
+  return order;
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c])); }
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+// ---------- orders table ----------
+function renderOrders(){
+  const tbody = document.getElementById('ordersBody');
+  const tfoot = document.getElementById('ordersFoot');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const monthSel = document.getElementById('monthFilter');
+  const statusSel = document.getElementById('statusFilter');
+
+  const months = [...new Set(orders.map(o=>monthKey(o.kapora_tarih)||monthKey(o.kalan_tarih)).filter(Boolean))].sort().reverse();
+  const currentMonth = monthSel.value || 'all';
+  monthSel.innerHTML = `<option value="all">Tüm Aylar</option>` + months.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
+  monthSel.value = months.includes(currentMonth) ? currentMonth : 'all';
+
+  let filtered = orders.filter(o=>{
+    if(monthSel.value === 'all') return true;
+    const mk = monthKey(o.kapora_tarih) || monthKey(o.kalan_tarih);
+    return mk === monthSel.value;
+  });
+
+  if(statusSel.value !== 'all'){
+    filtered = filtered.filter(o=>{
+      const done = isOrderDone(o);
+      return statusSel.value === 'done' ? done : !done;
+    });
+  }
+
+  document.getElementById('countLabel').textContent = `${filtered.length} kayıt`;
+
+  // Özet kartları — gider kayıtları gelir toplamlarına karışmaz, ayrı gösterilir
+  const gelirRows = filtered.filter(o=>o.kayitTuru!=='gider');
+  const giderRows = filtered.filter(o=>o.kayitTuru==='gider');
+  const totalKapora = gelirRows.reduce((s,o)=>s+(o.kapora_tutar||0),0);
+  const totalKalan = gelirRows.reduce((s,o)=>s+(o.kalan_tutar||0),0);
+  const totalToplam = gelirRows.reduce((s,o)=>s+(o.toplam||0),0);
+  const totalGider = giderRows.reduce((s,o)=>s+(o.toplam||0),0);
+  const waitingCount = gelirRows.filter(o=>!isOrderDone(o)).length;
+  
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-card">
+      <div class="label">Kapora Toplam</div>
+      <div class="value">${fmtMoney(totalKapora)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Kalan Toplam</div>
+      <div class="value wine">${fmtMoney(totalKalan)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Genel Toplam (Gelir)</div>
+      <div class="value sage">${fmtMoney(totalToplam)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Toplam Gider</div>
+      <div class="value" style="color:var(--danger);">${fmtMoney(totalGider)}</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Bekleyen</div>
+      <div class="value wine">${waitingCount}</div>
+    </div>
+  `;
+
+  if(filtered.length === 0){
+    tbody.innerHTML = ''; tfoot.innerHTML = '';
+    emptyMsg.style.display = 'block';
+    return;
+  }
+  emptyMsg.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(o=>{
+    const done = isOrderDone(o);
+    const isNew = o.id === lastAddedId ? 'new-row' : '';
+    const kisiLabel = o.kayitTuru === 'gider'
+      ? `${escapeHtml(o.kisi)} <span style="font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--danger); border:1px solid var(--danger); border-radius:8px; padding:1px 6px;">GİDER</span>`
+      : escapeHtml(o.kisi);
+
+    if(o.id === editingId){
+      return `
+      <tr data-id="${o.id}" class="editing-row">
+        <td><input type="text" class="e-kisi" value="${escapeAttr(o.kisi)}" style="width:100%"></td>
+        <td><input type="text" class="e-banka" value="${escapeAttr(o.banka||'')}" style="width:100%"></td>
+        <td><input type="text" class="e-kapora-faturaNo" value="${escapeAttr(o.kapora_faturaNo||'')}" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:11px;"></td>
+        <td><input type="number" step="0.01" class="e-kapora-tutar" value="${o.kapora_tutar??''}" style="width:100%"></td>
+        <td><input type="date" class="e-kapora-tarih" value="${o.kapora_tarih||''}" style="width:100%"></td>
+        <td><input type="text" class="e-kalan-faturaNo" value="${escapeAttr(o.kalan_faturaNo||'')}" style="width:100%; font-family:'IBM Plex Mono',monospace; font-size:11px;"></td>
+        <td><input type="number" step="0.01" class="e-kalan-tutar" value="${o.kalan_tutar??''}" style="width:100%"></td>
+        <td><input type="date" class="e-kalan-tarih" value="${o.kalan_tarih||''}" style="width:100%"></td>
+        <td>
+          <input type="text" class="e-kapora-aciklama" placeholder="Kapora açıklama" value="${escapeAttr(o.kapora_aciklama||'')}" style="width:100%; margin-bottom:4px;">
+          <input type="text" class="e-kalan-aciklama" placeholder="Kalan açıklama" value="${escapeAttr(o.kalan_aciklama||'')}" style="width:100%;">
+        </td>
+        <td class="num" style="font-weight:600;">${fmtMoney(o.toplam)}</td>
+        <td><span class="status-pill ${done?'done':'waiting'}">${done?'Tamamlandı':'Bekliyor'}</span></td>
+        <td>
+          ${o.dosyalar?.kapora ? `<button class="link-btn dl" data-key="${o.id}:kapora">Kapora</button><br>`:''}
+          ${o.dosyalar?.kalan ? `<button class="link-btn dl" data-key="${o.id}:kalan">Kalan</button><br>`:''}
+          ${o.dosyalar?.tam ? `<button class="link-btn dl" data-key="${o.id}:tam">Dekont</button>`:''}
+        </td>
+        <td>
+          <button class="link-btn save-edit">Kaydet</button><br>
+          <button class="link-btn cancel-edit">Vazgeç</button>
+        </td>
+      </tr>`;
+    }
+
+    return `
+    <tr data-id="${o.id}" class="${isNew}">
+      <td>${kisiLabel}</td>
+      <td>${escapeHtml(o.banka||'—')}</td>
+      <td style="font-family:'IBM Plex Mono',monospace; font-size:11px;">${escapeHtml(o.kapora_faturaNo||'—')}</td>
+      <td class="num">${fmtMoney(o.kapora_tutar)}</td>
+      <td>${fmtDate(o.kapora_tarih)}</td>
+      <td style="font-family:'IBM Plex Mono',monospace; font-size:11px;">${escapeHtml(o.kalan_faturaNo||'—')}</td>
+      <td class="num">${fmtMoney(o.kalan_tutar)}</td>
+      <td>${fmtDate(o.kalan_tarih)}</td>
+      <td style="white-space:pre-wrap;">${escapeHtml(fmtAciklama(o))}</td>
+      <td class="num" style="font-weight:600;">${fmtMoney(o.toplam)}</td>
+      <td><span class="status-pill ${done?'done':'waiting'}">${done?'Tamamlandı':'Bekliyor'}</span></td>
+      <td>
+        ${o.dosyalar?.kapora ? `<button class="link-btn dl" data-key="${o.id}:kapora">Kapora</button><br>`:''}
+        ${o.dosyalar?.kalan ? `<button class="link-btn dl" data-key="${o.id}:kalan">Kalan</button><br>`:''}
+        ${o.dosyalar?.tam ? `<button class="link-btn dl" data-key="${o.id}:tam">Dekont</button>`:''}
+      </td>
+      <td>
+        <button class="link-btn edit-btn">Düzenle</button><br>
+        <button class="link-btn del">Sil</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tfoot.innerHTML = `<tr>
+    <td colspan="2">Toplam</td>
+    <td></td>
+    <td class="num">${fmtMoney(totalKapora)}</td><td></td>
+    <td></td>
+    <td class="num">${fmtMoney(totalKalan)}</td><td></td>
+    <td></td>
+    <td class="num">${fmtMoney(totalToplam)}</td>
+    <td colspan="3"></td>
+  </tr>`;
+
+  tbody.querySelectorAll('.dl').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const key = btn.dataset.key;
+      const file = await getInvoiceFile(key);
+      if(!file){ alert('Dosya bulunamadı.'); return; }
+      const link = document.createElement('a');
+      link.href = `data:${file.mime};base64,${file.base64}`;
+      const order = orders.find(o=>o.id===key.split(':')[0]);
+      const extMap = {'application/pdf':'.pdf','text/html':'.html','application/xml':'.xml','image/jpeg':'.jpg','image/png':'.png'};
+      link.download = (order?.kisi||'dekont') + '-' + key.split(':')[1] + (extMap[file.mime] || '.txt');
+      link.click();
+    });
+  });
+  tbody.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      if(!confirm('Bu siparişi silmek istediğinize emin misiniz?')) return;
+      orders = orders.filter(o=>o.id!==id);
+      if(lastAddedId === id) lastAddedId = null;
+      if(editingId === id) editingId = null;
+      await saveOrders();
+      renderOrders();
+    });
+  });
+  tbody.querySelectorAll('.edit-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      editingId = e.target.closest('tr').dataset.id;
+      renderOrders();
+    });
+  });
+  tbody.querySelectorAll('.cancel-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      editingId = null;
+      renderOrders();
+    });
+  });
+  tbody.querySelectorAll('.save-edit').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const tr = e.target.closest('tr');
+      const id = tr.dataset.id;
+      const order = orders.find(o=>o.id===id);
+      if(!order) return;
+      const newKaporaNo = tr.querySelector('.e-kapora-faturaNo').value.trim();
+      const newKalanNo = tr.querySelector('.e-kalan-faturaNo').value.trim();
+      if(newKaporaNo && isDuplicateFaturaNo(newKaporaNo, order.id)){
+        alert('Bu Kapora Dekont No ile zaten kayıtlı bir sipariş var.'); return;
+      }
+      if(newKalanNo && isDuplicateFaturaNo(newKalanNo, order.id)){
+        alert('Bu Kalan Dekont No ile zaten kayıtlı bir sipariş var.'); return;
+      }
+      order.kisi = tr.querySelector('.e-kisi').value.trim();
+      order.kapora_faturaNo = newKaporaNo;
+      order.kalan_faturaNo = newKalanNo;
+      order.banka = tr.querySelector('.e-banka').value.trim();
+      order.kapora_tutar = parseFloat(tr.querySelector('.e-kapora-tutar').value);
+      order.kapora_tutar = isNaN(order.kapora_tutar) ? null : order.kapora_tutar;
+      order.kapora_tarih = tr.querySelector('.e-kapora-tarih').value || null;
+      order.kapora_aciklama = tr.querySelector('.e-kapora-aciklama').value.trim();
+      order.kalan_tutar = parseFloat(tr.querySelector('.e-kalan-tutar').value);
+      order.kalan_tutar = isNaN(order.kalan_tutar) ? null : order.kalan_tutar;
+      order.kalan_tarih = tr.querySelector('.e-kalan-tarih').value || null;
+      order.kalan_aciklama = tr.querySelector('.e-kalan-aciklama').value.trim();
+      order.toplam = (order.kapora_tutar||0) + (order.kalan_tutar||0) || null;
+      editingId = null;
+      await saveOrders();
+      renderOrders();
+    });
+  });
+}
+
+// ---------- CSV Export ----------
+function exportCSV(){
+  const monthSel = document.getElementById('monthFilter');
+  const statusSel = document.getElementById('statusFilter');
+  let filtered = orders.filter(o=>{
+    if(monthSel.value === 'all') return true;
+    const mk = monthKey(o.kapora_tarih) || monthKey(o.kalan_tarih);
+    return mk === monthSel.value;
+  });
+  if(statusSel.value !== 'all'){
+    filtered = filtered.filter(o=>{
+      const done = isOrderDone(o);
+      return statusSel.value === 'done' ? done : !done;
+    });
+  }
+  
+  const headers = ['Kayıt Türü','Kişi','Banka','Kapora Dekont No','Kapora Tutarı','Kapora Tarihi','Kapora Açıklama','Kalan Dekont No','Kalan Tutarı','Kalan Tarihi','Kalan Açıklama','Toplam','Durum'];
+  const rows = filtered.map(o=>{
+    const done = isOrderDone(o);
+    return [
+      o.kayitTuru === 'gider' ? 'Gider' : 'Sipariş',
+      o.kisi,
+      o.banka || '',
+      o.kapora_faturaNo || '',
+      o.kapora_tutar || '',
+      o.kapora_tarih || '',
+      o.kapora_aciklama || '',
+      o.kalan_faturaNo || '',
+      o.kalan_tutar || '',
+      o.kalan_tarih || '',
+      o.kalan_aciklama || '',
+      o.toplam || '',
+      done ? 'Tamamlandı' : 'Bekliyor'
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(';');
+  });
+  
+  const csv = [headers.join(';'), ...rows].join('\n');
+  const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8;'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `pasta-siparisleri-${new Date().toISOString().slice(0,10)}.csv`;
+  link.click();
+}
+
+// ---------- favorites ----------
+function renderFavorites(){
+  const wrap = document.getElementById('favChips');
+  wrap.innerHTML = favorites.map(f=>`
+    <span class="chip" data-name="${escapeAttr(f)}">${escapeHtml(f)}<span class="x" data-remove="${escapeAttr(f)}">✕</span></span>
+  `).join('');
+  wrap.querySelectorAll('.chip').forEach(chip=>{
+    chip.addEventListener('click', (e)=>{
+      if(e.target.dataset.remove !== undefined){
+        favorites = favorites.filter(f=>f!==e.target.dataset.remove);
+        saveFavorites(); renderFavorites();
+        return;
+      }
+      document.getElementById('m_kisi').value = chip.dataset.name;
+    });
+  });
+}
+
+// ---------- events ----------
+document.getElementById('dropzone').addEventListener('click', ()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  handleFiles(e.target.files);
+  e.target.value = '';
+});
+['dragover','dragleave','drop'].forEach(evt=>{
+  document.getElementById('dropzone').addEventListener(evt, (e)=>{
+    e.preventDefault();
+    document.getElementById('dropzone').classList.toggle('drag', evt==='dragover');
+    if(evt==='drop') handleFiles(e.dataTransfer.files);
+  });
+});
+document.getElementById('monthFilter').addEventListener('change', renderOrders);
+document.getElementById('statusFilter').addEventListener('change', renderOrders);
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+document.getElementById('addFavBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('newFavInput');
+  const name = input.value.trim();
+  if(!name) return;
+  if(!favorites.includes(name)) favorites.push(name);
+  saveFavorites(); renderFavorites();
+  input.value = '';
+});
+function applyManualFormMode(){
+  const isGider = document.getElementById('m_kayit_turu').value === 'gider';
+  document.getElementById('m_kapora_fields').style.display = isGider ? 'none' : '';
+  document.getElementById('m_kisi_label').textContent = isGider ? 'Ödenen Kişi/Kurum' : 'Kişi';
+  document.getElementById('m_kalan_no_label').textContent = isGider ? 'Dekont No' : 'Kalan Dekont No';
+  document.getElementById('m_kalan_tutar_label').textContent = isGider ? 'Tutar (₺)' : 'Kalan Tutar (₺)';
+  document.getElementById('m_kalan_tarih_label').textContent = isGider ? 'Tarih' : 'Kalan Tarihi';
+  document.getElementById('m_kalan_aciklama_label').textContent = isGider ? 'Açıklama' : 'Kalan Açıklaması';
+  document.getElementById('m_save').textContent = isGider ? 'Gideri Kaydet' : 'Siparişi Kaydet';
+}
+document.getElementById('m_kayit_turu').addEventListener('change', applyManualFormMode);
+applyManualFormMode();
+
+document.getElementById('m_save').addEventListener('click', async ()=>{
+  const isGider = document.getElementById('m_kayit_turu').value === 'gider';
+  const kisi = document.getElementById('m_kisi').value.trim();
+  if(!kisi){ alert(isGider ? 'Ödenen kişi/kurum adı gerekli.' : 'Kişi adı gerekli.'); return; }
+  const kapora_faturaNo = isGider ? '' : document.getElementById('m_kapora_fatura_no').value.trim();
+  const kalan_faturaNo = document.getElementById('m_kalan_fatura_no').value.trim();
+  if(kapora_faturaNo && isDuplicateFaturaNo(kapora_faturaNo)){
+    alert('Bu Kapora Dekont No ile zaten kayıtlı bir sipariş var.'); return;
+  }
+  if(kalan_faturaNo && isDuplicateFaturaNo(kalan_faturaNo)){
+    alert(isGider ? 'Bu Dekont No ile zaten kayıtlı bir kayıt var.' : 'Bu Kalan Dekont No ile zaten kayıtlı bir sipariş var.'); return;
+  }
+  const kapora_tutar = isGider ? null : (parseFloat(document.getElementById('m_kapora_tutar').value) || null);
+  const kapora_tarih = isGider ? null : (document.getElementById('m_kapora_tarih').value || null);
+  const kapora_aciklama = isGider ? '' : document.getElementById('m_kapora_aciklama').value.trim();
+  const kalan_tutar = parseFloat(document.getElementById('m_kalan_tutar').value) || null;
+  const kalan_tarih = document.getElementById('m_kalan_tarih').value || null;
+  const kalan_aciklama = document.getElementById('m_kalan_aciklama').value.trim();
+  const banka = document.getElementById('m_banka').value.trim();
+  const order = {
+    id: uid(), kisi, banka, kayitTuru: isGider ? 'gider' : 'siparis',
+    kapora_tutar, kapora_tarih, kapora_aciklama, kapora_faturaNo,
+    kalan_tutar, kalan_tarih, kalan_aciklama, kalan_faturaNo,
+    toplam: (kapora_tutar||0)+(kalan_tutar||0) || null, dosyalar:{}
+  };
+  orders.push(order);
+  lastAddedId = order.id;
+  await saveOrders();
+  ['m_kisi','m_kapora_fatura_no','m_banka','m_kapora_tutar','m_kapora_tarih','m_kapora_aciklama','m_kalan_fatura_no','m_kalan_tutar','m_kalan_tarih','m_kalan_aciklama'].forEach(id=>document.getElementById(id).value='');
+  renderOrders();
+});
+
+// ================= SEKME GEÇİŞİ =================
+document.getElementById('tabBtnDekont').addEventListener('click', ()=>switchTab('dekont'));
+document.getElementById('tabBtnSiparis').addEventListener('click', ()=>switchTab('siparis'));
+function switchTab(name){
+  document.getElementById('tab-dekont').style.display = name==='dekont' ? '' : 'none';
+  document.getElementById('tab-siparis').style.display = name==='siparis' ? '' : 'none';
+  document.getElementById('tabBtnDekont').classList.toggle('active', name==='dekont');
+  document.getElementById('tabBtnSiparis').classList.toggle('active', name==='siparis');
+}
+
+// ================= PASTA SİPARİŞLERİ (Siparişlerim) =================
+let cakeOrders = [];
+let cakePhotoBase64 = null; // yeni eklenen sipariş için geçici foto
+
+async function loadCakeOrders(){
+  try{
+    const res = await window.storage.get(skey('cake-orders-list'), sshared());
+    cakeOrders = res ? JSON.parse(res.value) : [];
+  }catch(e){ cakeOrders = []; }
+}
+async function saveCakeOrders(){
+  try{ await window.storage.set(skey('cake-orders-list'), JSON.stringify(cakeOrders), sshared()); }
+  catch(e){ console.error('Pasta siparişi kaydedilemedi', e); }
+}
+async function saveCakePhoto(id, base64){
+  try{
+    const result = await window.storage.set(skey('cake-photo:'+id), base64, sshared());
+    return !!result;
+  }catch(e){ console.error('Foto kaydedilemedi', e); return false; }
+}
+async function getCakePhoto(id){
+  try{
+    const res = await window.storage.get(skey('cake-photo:'+id), sshared());
+    return res ? res.value : null;
+  }catch(e){ return null; }
+}
+async function deleteCakePhoto(id){
+  try{ await window.storage.delete(skey('cake-photo:'+id), sshared()); }catch(e){}
+}
+
+const cakeUid = () => 'c_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+const durumLabel = {bekliyor:'Bekliyor', hazirlaniyor:'Hazırlanıyor', hazir:'Hazır', teslim:'Teslim Edildi'};
+const kekTipiLabel = {sade:'Sade', kakao:'Kakao', karisik:'Karışık', 'red-velvet':'Red Velvet', diger:'Diğer'};
+const icMalzemeLabel = {meyveli:'Meyveli', cikolatali:'Çikolatalı', fistikli:'Fıstıklı', frambuazli:'Frambuazlı', karisik:'Karışık', diger:'Diğer'};
+
+// ---- Adres satırı: sesle yazma + tıklayınca Google Haritalar'da açma ----
+function setupMicButton(btnId, statusId, targetId){
+  let recognition = null;
+  let recognizing = false;
+  const btn = document.getElementById(btnId);
+  if(!btn) return;
+  btn.addEventListener('click', ()=>{
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const statusEl = document.getElementById(statusId);
+    if(!SR){
+      if(statusEl) statusEl.textContent = 'Bu tarayıcı sesle yazmayı desteklemiyor. Telefonda Chrome kullanmayı deneyin.';
+      return;
+    }
+    if(recognizing){ recognition && recognition.stop(); return; }
+    recognition = new SR();
+    recognition.lang = 'tr-TR';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.onstart = ()=>{ recognizing = true; btn.textContent = '⏺️'; if(statusEl) statusEl.textContent = 'Dinleniyor… bitirince mikrofona tekrar basın.'; };
+    recognition.onend = ()=>{ recognizing = false; btn.textContent = '🎤'; if(statusEl) statusEl.textContent = ''; };
+    recognition.onerror = (e)=>{
+      recognizing = false; btn.textContent = '🎤';
+      if(statusEl) statusEl.textContent = e.error === 'no-speech' ? '' : 'Ses tanıma hatası: ' + e.error;
+    };
+    recognition.onresult = (event)=>{
+      let text = '';
+      for(let i=event.resultIndex; i<event.results.length; i++){ text += event.results[i][0].transcript; }
+      const field = document.getElementById(targetId);
+      field.value = (field.value.trim() ? field.value.trim() + ' ' : '') + text.trim();
+    };
+    try{ recognition.start(); }
+    catch(e){ if(statusEl) statusEl.textContent = 'Başlatılamadı: ' + e.message; }
+  });
+}
+setupMicButton('c_adresMic', 'c_adresMicStatus', 'c_adres');
+
+// Adres kutusuna yazılmış metni Google Haritalar'da aramak için açar.
+function openAddressInMaps(){
+  const val = document.getElementById('c_adres').value.trim();
+  if(!val) return;
+  window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(val), '_blank');
+}
+document.getElementById('c_adresMapBtn').addEventListener('click', openAddressInMaps);
+// Adres satırına tıklandığında (içinde zaten bir adres varsa) doğrudan
+// Google Haritalar açılır; alan boşsa tıklama sadece yazmaya başlamanızı sağlar.
+document.getElementById('c_adres').addEventListener('click', function(){
+  if(this.value.trim()) openAddressInMaps();
+});
+
+// Telefon fotoğrafları/ekran görüntüleri çoğu zaman büyük boyutlu oluyor;
+// depolama sınırını aşıp sessizce kaybolmasınlar diye önce küçültüp
+// sıkıştırıyoruz (uzun kenar en fazla 1000px, JPEG kalite 0.75).
+function compressImage(file, maxDim, quality){
+  maxDim = maxDim || 1000; quality = quality || 0.75;
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          if(width > height){ height = Math.round(height * (maxDim/width)); width = maxDim; }
+          else { width = Math.round(width * (maxDim/height)); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = ()=> reject(new Error('Görsel açılamadı, dosya bozuk olabilir.'));
+      img.src = reader.result;
+    };
+    reader.onerror = ()=> reject(new Error('Dosya okunamadı.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('c_fotoBtn').addEventListener('click', ()=> document.getElementById('c_foto').click());
+document.getElementById('c_foto').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const fnEl = document.getElementById('c_fotoFileName');
+  fnEl.textContent = 'İşleniyor…';
+  try{
+    cakePhotoBase64 = await compressImage(file);
+    const img = document.getElementById('c_fotoPreview');
+    img.src = cakePhotoBase64;
+    img.style.display = 'block';
+    fnEl.textContent = file.name + ' ✓ eklendi';
+  }catch(err){
+    cakePhotoBase64 = null;
+    fnEl.textContent = '';
+    alert('Fotoğraf işlenemedi: ' + err.message);
+  }
+});
+
+// ---- Sesle not yazdırma (Web Speech API, tr-TR) ----
+let notRecognition = null;
+let notRecognizing = false;
+document.getElementById('c_notMic').addEventListener('click', ()=>{
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const statusEl = document.getElementById('c_notMicStatus');
+  if(!SR){
+    statusEl.textContent = 'Bu tarayıcı sesle yazmayı desteklemiyor. Telefonda Chrome kullanmayı deneyin.';
+    return;
+  }
+  const btn = document.getElementById('c_notMic');
+  if(notRecognizing){ notRecognition && notRecognition.stop(); return; }
+  notRecognition = new SR();
+  notRecognition.lang = 'tr-TR';
+  notRecognition.continuous = true;
+  notRecognition.interimResults = false;
+  notRecognition.onstart = ()=>{ notRecognizing = true; btn.textContent = '⏺️'; statusEl.textContent = 'Dinleniyor… bitirince mikrofona tekrar basın.'; };
+  notRecognition.onend = ()=>{ notRecognizing = false; btn.textContent = '🎤'; statusEl.textContent = ''; };
+  notRecognition.onerror = (e)=>{
+    notRecognizing = false; btn.textContent = '🎤';
+    statusEl.textContent = e.error === 'no-speech' ? '' : 'Ses tanıma hatası: ' + e.error;
+  };
+  notRecognition.onresult = (event)=>{
+    let text = '';
+    for(let i=event.resultIndex; i<event.results.length; i++){ text += event.results[i][0].transcript; }
+    const notField = document.getElementById('c_not');
+    notField.value = (notField.value.trim() ? notField.value.trim() + ' ' : '') + text.trim();
+  };
+  try{ notRecognition.start(); }
+  catch(e){ statusEl.textContent = 'Başlatılamadı: ' + e.message; }
+});
+
+let editingCakeId = null; // düzenleme modundaysa güncellenen siparişin id'si
+
+function resetCakeForm(){
+  ['c_musteri','c_telefon','c_adres','c_tarih','c_kisisayisi','c_fiyat','c_kapora','c_not'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('c_kektipi').value='sade';
+  document.getElementById('c_icmalzeme').value='meyveli';
+  document.getElementById('c_durum').value='bekliyor';
+  document.getElementById('c_foto').value='';
+  document.getElementById('c_fotoFileName').textContent='';
+  document.getElementById('c_fotoPreview').style.display='none';
+  cakePhotoBase64 = null;
+  editingCakeId = null;
+  document.getElementById('cakeFormTitle').textContent = '🎂 Yeni Pasta Siparişi';
+  document.getElementById('c_save').textContent = 'Siparişi Kaydet';
+  document.getElementById('c_cancelEdit').style.display = 'none';
+}
+
+// Bir siparişi düzenlemek için formu o siparişin bilgileriyle doldurur ve
+// formu görünür kılıp oraya kaydırır.
+async function startEditCakeOrder(id){
+  const o = cakeOrders.find(x=>x.id===id);
+  if(!o) return;
+  editingCakeId = id;
+  document.getElementById('c_musteri').value = o.musteri || '';
+  document.getElementById('c_telefon').value = o.telefon || '';
+  document.getElementById('c_adres').value = o.adres || '';
+  document.getElementById('c_tarih').value = o.tarih || '';
+  document.getElementById('c_kisisayisi').value = o.kisiSayisi || '';
+  document.getElementById('c_fiyat').value = o.fiyat != null ? o.fiyat : '';
+  document.getElementById('c_kapora').value = o.kapora != null ? o.kapora : '';
+  document.getElementById('c_durum').value = o.durum || 'bekliyor';
+  document.getElementById('c_kektipi').value = o.kekTipi || 'sade';
+  document.getElementById('c_icmalzeme').value = o.icMalzeme || 'meyveli';
+  document.getElementById('c_not').value = o.not || '';
+  cakePhotoBase64 = null;
+  document.getElementById('c_foto').value = '';
+  if(o.hasFoto){
+    const photo = await getCakePhoto(id);
+    if(photo){
+      cakePhotoBase64 = photo; // düzenlemede fotoğrafı değiştirmezse aynısı korunur
+      const img = document.getElementById('c_fotoPreview');
+      img.src = photo; img.style.display = 'block';
+      document.getElementById('c_fotoFileName').textContent = 'Mevcut fotoğraf ✓';
+    }
+  } else {
+    document.getElementById('c_fotoPreview').style.display = 'none';
+    document.getElementById('c_fotoFileName').textContent = '';
+  }
+  document.getElementById('cakeFormTitle').textContent = '✏️ Siparişi Düzenle — ' + o.musteri;
+  document.getElementById('c_save').textContent = 'Değişiklikleri Kaydet';
+  document.getElementById('c_cancelEdit').style.display = '';
+  document.getElementById('cakeFormTitle').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+document.getElementById('c_cancelEdit').addEventListener('click', resetCakeForm);
+
+document.getElementById('c_save').addEventListener('click', async ()=>{
+  const musteri = document.getElementById('c_musteri').value.trim();
+  if(!musteri){ alert('Müşteri adı gerekli.'); return; }
+  const saveBtn = document.getElementById('c_save');
+  saveBtn.disabled = true; saveBtn.textContent = editingCakeId ? 'Güncelleniyor…' : 'Kaydediliyor…';
+  const isEdit = !!editingCakeId;
+  const orderId = isEdit ? editingCakeId : cakeUid();
+  const existing = isEdit ? cakeOrders.find(x=>x.id===orderId) : null;
+  const order = {
+    id: orderId,
+    musteri,
+    telefon: document.getElementById('c_telefon').value.trim(),
+    adres: document.getElementById('c_adres').value.trim(),
+    tarih: document.getElementById('c_tarih').value || null,
+    kisiSayisi: parseInt(document.getElementById('c_kisisayisi').value,10) || null,
+    fiyat: parseFloat(document.getElementById('c_fiyat').value) || null,
+    kapora: parseFloat(document.getElementById('c_kapora').value) || null,
+    durum: document.getElementById('c_durum').value,
+    kekTipi: document.getElementById('c_kektipi').value,
+    icMalzeme: document.getElementById('c_icmalzeme').value,
+    not: document.getElementById('c_not').value.trim(),
+    hasFoto: existing ? existing.hasFoto : false,
+    olusturma: existing ? existing.olusturma : new Date().toISOString()
+  };
+  // Foto önce (varsa) gerçekten kaydedilip kaydedilemediği kontrol edilir;
+  // hasFoto sadece kayıt gerçekten başarılıysa true yapılır — aksi halde
+  // kart ileride hep boş/placeholder görünürdü.
+  let photoFailed = false;
+  if(cakePhotoBase64){
+    const ok = await saveCakePhoto(order.id, cakePhotoBase64);
+    order.hasFoto = ok;
+    photoFailed = !ok;
+  } else if(isEdit && !existing.hasFoto){
+    order.hasFoto = false;
+  }
+  if(isEdit){
+    const idx = cakeOrders.findIndex(x=>x.id===orderId);
+    if(idx > -1) cakeOrders[idx] = order; else cakeOrders.unshift(order);
+  } else {
+    cakeOrders.unshift(order);
+  }
+  await saveCakeOrders();
+  if(photoFailed){
+    alert('Sipariş kaydedildi fakat fotoğraf kaydedilemedi (çok büyük olabilir). Lütfen daha küçük bir fotoğrafla tekrar eklemeyi deneyin.');
+  }
+  resetCakeForm();
+  saveBtn.disabled = false;
+  renderCakeOrders();
+  if(driveModeActive()) driveSyncPush();
+});
+
+document.getElementById('cDurumFilter').addEventListener('change', renderCakeOrders);
+
+async function renderCakeOrders(){
+  const grid = document.getElementById('cakeGrid');
+  const filterVal = document.getElementById('cDurumFilter').value;
+  let list = cakeOrders.slice();
+  if(filterVal !== 'all') list = list.filter(o=>o.durum===filterVal);
+  document.getElementById('cakeEmptyMsg').style.display = list.length ? 'none' : '';
+  document.getElementById('cCountLabel').textContent = list.length + ' sipariş';
+
+  const cards = await Promise.all(list.map(async (o)=>{
+    let photoHtml = `<div class="cake-photo placeholder">🎂</div>`;
+    if(o.hasFoto){
+      const photo = await getCakePhoto(o.id);
+      if(photo) photoHtml = `<img class="cake-photo" src="${photo}">`;
+    }
+    return `
+      <div class="cake-card" data-id="${o.id}">
+        ${photoHtml}
+        <div class="cake-body">
+          <p class="cake-name">${escapeHtml(o.musteri)}</p>
+          <div class="cake-meta">
+            📅 ${fmtDate(o.tarih)} &nbsp;·&nbsp; 👥 ${o.kisiSayisi ? o.kisiSayisi+' kişilik' : '—'}<br>
+            🎂 ${kekTipiLabel[o.kekTipi]||o.kekTipi} · İç: ${icMalzemeLabel[o.icMalzeme]||o.icMalzeme}
+            ${o.telefon ? '<br>📞 '+escapeHtml(o.telefon) : ''}
+            ${o.adres ? '<br>📍 '+escapeHtml(o.adres) : ''}
+          </div>
+          ${o.not ? `<div class="cake-note">📝 ${escapeHtml(o.not)}</div>` : ''}
+          <div class="cake-price">${fmtMoney(o.fiyat)}${o.kapora != null ? ` <span style="font-size:11.5px; font-weight:500; color:var(--ink-soft);">(Kapora: ${fmtMoney(o.kapora)}${o.fiyat != null ? ', Kalan: '+fmtMoney((o.fiyat||0)-(o.kapora||0)) : ''})</span>` : ''}</div>
+        </div>
+        <div class="cake-footer">
+          <select class="durum-select" data-id="${o.id}">
+            ${Object.keys(durumLabel).map(k=>`<option value="${k}" ${o.durum===k?'selected':''}>${durumLabel[k]}</option>`).join('')}
+          </select>
+          <div style="display:flex; gap:6px;">
+            <button class="btn secondary small cake-print" data-id="${o.id}" title="A4 sipariş fişi yazdır">🖨️ Yazdır</button>
+            <button class="btn secondary small cake-edit" data-id="${o.id}" title="Siparişi düzenle">✏️ Düzenle</button>
+            <button class="btn secondary small cake-del" data-id="${o.id}">Sil</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }));
+  grid.innerHTML = cards.join('');
+
+  grid.querySelectorAll('.cake-edit').forEach(btn=>{
+    btn.addEventListener('click', (e)=> startEditCakeOrder(e.target.closest('.cake-edit').dataset.id));
+  });
+  grid.querySelectorAll('.durum-select').forEach(sel=>{
+    sel.addEventListener('change', async (e)=>{
+      const o = cakeOrders.find(x=>x.id===e.target.dataset.id);
+      if(o){ o.durum = e.target.value; await saveCakeOrders(); if(driveModeActive()) driveSyncPush(); }
+    });
+  });
+  grid.querySelectorAll('.cake-del').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const id = e.target.dataset.id;
+      if(!confirm('Bu pasta siparişini silmek istediğinize emin misiniz?')) return;
+      cakeOrders = cakeOrders.filter(o=>o.id!==id);
+      await deleteCakePhoto(id);
+      await saveCakeOrders();
+      if(editingCakeId === id) resetCakeForm();
+      renderCakeOrders();
+      if(driveModeActive()) driveSyncPush();
+    });
+  });
+  grid.querySelectorAll('.cake-print').forEach(btn=>{
+    btn.addEventListener('click', (e)=> printCakeOrder(e.target.closest('.cake-print').dataset.id));
+  });
+
+  renderDeliveryList();
+}
+
+// Sipariş oluşturuldukça (ya da durumu değiştikçe) otomatik güncellenen,
+// tarihe göre sıralı ayrı bir teslimat listesi.
+function renderDeliveryList(){
+  const section = document.getElementById('teslimatListesiSection');
+  const tbody = document.getElementById('teslimatTbody');
+  if(!section || !tbody) return;
+  if(!cakeOrders.length){ section.style.display = 'none'; return; }
+  section.style.display = '';
+  const sorted = cakeOrders.slice().sort((a,b)=>{
+    if(!a.tarih && !b.tarih) return 0;
+    if(!a.tarih) return 1;
+    if(!b.tarih) return -1;
+    return a.tarih.localeCompare(b.tarih);
+  });
+  document.getElementById('teslimatCountLabel').textContent = sorted.length + ' sipariş';
+  tbody.innerHTML = sorted.map(o=>`
+    <tr style="border-bottom:1px solid var(--line);">
+      <td style="padding:6px 8px; white-space:nowrap;">${fmtDate(o.tarih)}</td>
+      <td style="padding:6px 8px;">${escapeHtml(o.musteri)}</td>
+      <td style="padding:6px 8px; white-space:nowrap;">${escapeHtml(o.telefon||'—')}</td>
+      <td style="padding:6px 8px;">${escapeHtml(o.adres||'—')}</td>
+      <td style="padding:6px 8px; white-space:nowrap;">${kekTipiLabel[o.kekTipi]||o.kekTipi} / ${icMalzemeLabel[o.icMalzeme]||o.icMalzeme}</td>
+      <td style="padding:6px 8px; white-space:nowrap;">${fmtMoney(o.fiyat)}</td>
+      <td style="padding:6px 8px; white-space:nowrap;">${o.kapora != null ? fmtMoney(o.kapora)+' / '+fmtMoney((o.fiyat||0)-(o.kapora||0)) : '—'}</td>
+      <td style="padding:6px 8px; white-space:nowrap;">${durumLabel[o.durum]||o.durum}</td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('teslimatPrintBtn').addEventListener('click', ()=>{
+  const win = window.open('', '_blank');
+  if(!win){ alert('Yazdırma penceresi açılamadı. Tarayıcınızın pop-up engelleyicisini kontrol edin.'); return; }
+  const tableHtml = document.getElementById('teslimatTable').outerHTML;
+  win.document.open();
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Teslimat Listesi</title>
+<style>
+  @page{ size:A4; margin:12mm; }
+  body{ font-family:'Segoe UI', Arial, sans-serif; color:#2b1c14; }
+  h1{ font-size:17px; margin:0 0 12px; border-bottom:2px solid #7a2e2e; padding-bottom:6px; }
+  table{ width:100%; border-collapse:collapse; font-size:12px; }
+  th,td{ padding:6px 8px; border-bottom:1px solid #ddd; text-align:left; }
+  th{ border-bottom:2px solid #2b1c14; }
+</style></head><body>
+<h1>📋 Teslimat Listesi — ${new Date().toLocaleDateString('tr-TR')}</h1>
+${tableHtml}
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`);
+  win.document.close();
+});
+
+// A4 kağıda uygun, büyük fotoğraflı sipariş fişi yazdırma
+async function printCakeOrder(id){
+  const o = cakeOrders.find(x=>x.id===id);
+  if(!o) return;
+  let photoSrc = '';
+  if(o.hasFoto){ photoSrc = (await getCakePhoto(id)) || ''; }
+  const win = window.open('', '_blank');
+  if(!win){ alert('Yazdırma penceresi açılamadı. Tarayıcınızın pop-up engelleyicisini kontrol edin.'); return; }
+  const rows = [
+    ['Tarih', fmtDate(o.tarih)],
+    ['Kişi Sayısı', o.kisiSayisi ? o.kisiSayisi+' kişilik' : '—'],
+    ['Kek Tipi', kekTipiLabel[o.kekTipi]||o.kekTipi],
+    ['İç Malzeme', icMalzemeLabel[o.icMalzeme]||o.icMalzeme],
+    ['Fiyat', fmtMoney(o.fiyat)],
+    ['Kapora', o.kapora != null ? fmtMoney(o.kapora) : '—'],
+    ['Kalan', (o.fiyat != null && o.kapora != null) ? fmtMoney(o.fiyat - o.kapora) : '—'],
+    ['Telefon', o.telefon || '—'],
+    ['Adres', o.adres || '—'],
+    ['Durum', durumLabel[o.durum]||o.durum]
+  ];
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sipariş Fişi - ${escapeHtml(o.musteri)}</title>
+<style>
+  @page{ size:A4; margin:12mm; }
+  *{ box-sizing:border-box; }
+  html, body{ margin:0; padding:0; }
+  body{ font-family:'Segoe UI', Arial, sans-serif; color:#2b1c14; }
+  .wrap{ width:100%; }
+  h1{ font-size:17px; margin:0 0 8px; border-bottom:2px solid #7a2e2e; padding-bottom:6px; }
+  /* Fotoğraf kutusu sabit yükseklikte (mm) — vh/flex yerine bunu kullanmak
+     yazıcı önizlemesinde fotoğrafın gerçek boyutundan büyük basılıp geri
+     kalan bilgileri 2. sayfaya itmesini engeller. */
+  .photo-area{ width:100%; height:145mm; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:10px; }
+  .photo-area img{ max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; border-radius:6px; display:block; }
+  .photo-area .noimg{ font-size:100px; color:#ddd; }
+  .details{ font-size:12.5px; line-height:1.65; padding-top:8px; border-top:1px solid #ddd; }
+  .details .row{ display:flex; }
+  .details b{ display:inline-block; width:95px; flex-shrink:0; }
+  .note-box{ margin-top:8px; padding:8px 10px; background:#f7f1e8; border-radius:6px; font-size:12px; white-space:pre-wrap; }
+</style></head><body>
+<div class="wrap">
+  <h1>🎂 Pasta Sipariş Fişi — ${escapeHtml(o.musteri)}</h1>
+  <div class="photo-area">${photoSrc ? `<img src="${photoSrc}">` : `<div class="noimg">🎂</div>`}</div>
+  <div class="details">
+    ${rows.map(r=>`<div class="row"><b>${r[0]}:</b><span>${escapeHtml(String(r[1]))}</span></div>`).join('')}
+    ${o.not ? `<div class="note-box"><b>Not:</b><br>${escapeHtml(o.not)}</div>` : ''}
+  </div>
+</div>
+<script>window.onload = function(){ window.print(); };<\/script>
+</body></html>`;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+// ================= GOOGLE TASKS BAĞLANTISI =================
+let gtTokenClient = null;
+let gtAccessToken = null;
+let googleAccessToken = null; // Tasks + Drive için ortak erişim token'ı
+let driveFileId = null;
+let driveSyncing = false;
+
+async function loadGtClientId(){
+  try{
+    const res = await window.storage.get('gtasks-client-id', false);
+    return res ? res.value : '';
+  }catch(e){ return ''; }
+}
+async function saveGtClientId(id){
+  try{ await window.storage.set('gtasks-client-id', id, false); }catch(e){}
+}
+
+// Görev notlarındaki "Tarih:/Kişi:/Kek:/İç:/Fiyat:/Telefon:/Not:" şablonunu ayrıştırır
+function matchKekTipi(val){
+  const v = val.toLowerCase();
+  if(v.includes('kakao')) return 'kakao';
+  if(v.includes('red velvet') || v.includes('red-velvet')) return 'red-velvet';
+  if(v.includes('karış') || v.includes('karis')) return 'karisik';
+  if(v.includes('sade')) return 'sade';
+  return null;
+}
+function matchIcMalzeme(val){
+  const v = val.toLowerCase();
+  if(v.includes('çikolata') || v.includes('cikolata')) return 'cikolatali';
+  if(v.includes('fıstık') || v.includes('fistik')) return 'fistikli';
+  if(v.includes('frambuaz')) return 'frambuazli';
+  if(v.includes('karış') || v.includes('karis')) return 'karisik';
+  if(v.includes('meyve')) return 'meyveli';
+  return null;
+}
+function parseCakeTemplate(title, notes){
+  const result = {musteri: title||'', tarih:null, kisi:null, kek:null, ic:null, fiyat:null, telefon:null, not:''};
+  if(!notes) return result;
+  const leftover = [];
+  notes.split(/\r?\n/).forEach(line=>{
+    const m = line.match(/^\s*(tarih|kişi|kisi|kek|iç|ic|fiyat|telefon|not)\s*:\s*(.*)$/i);
+    if(!m){ if(line.trim()) leftover.push(line.trim()); return; }
+    const key = m[1].toLowerCase();
+    const val = m[2].trim();
+    if(!val) return;
+    if(key==='tarih'){
+      const dm = val.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);
+      if(dm) result.tarih = `${dm[3]}-${dm[2].padStart(2,'0')}-${dm[1].padStart(2,'0')}`;
+      else if(/^\d{4}-\d{2}-\d{2}$/.test(val)) result.tarih = val;
+    } else if(key==='kişi' || key==='kisi'){
+      const num = val.match(/\d+/);
+      if(num) result.kisi = parseInt(num[0],10);
+    } else if(key==='kek'){
+      result.kek = matchKekTipi(val);
+    } else if(key==='iç' || key==='ic'){
+      result.ic = matchIcMalzeme(val);
+    } else if(key==='fiyat'){
+      const num = val.replace(/[^\d,.\-]/g,'').replace(',', '.');
+      const f = parseFloat(num);
+      if(!isNaN(f)) result.fiyat = f;
+    } else if(key==='telefon'){
+      result.telefon = val;
+    } else if(key==='not'){
+      leftover.push(val);
+    }
+  });
+  result.not = leftover.join(' / ');
+  return result;
+}
+
+function gtSetStatus(msg, isError){
+  const el = document.getElementById('gtStatusLine');
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+}
+function driveSetStatus(msg, isError){
+  const el = document.getElementById('driveSyncStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+}
+
+// ================= ORTAK SİPARİŞ DEPOSU (Google Drive senkronizasyonu) =================
+async function loadDriveFileId(){
+  try{ const r = await window.storage.get('gdrive-cake-file-id', false); return r ? r.value : null; }
+  catch(e){ return null; }
+}
+async function saveDriveFileIdLocal(id){ try{ await window.storage.set('gdrive-cake-file-id', id, false); }catch(e){} }
+async function clearDriveFileIdLocal(){ try{ await window.storage.delete('gdrive-cake-file-id', false); }catch(e){} }
+
+async function driveCreateFile(name, contentObj){
+  const boundary = 'pastasiparis' + Date.now();
+  const delimiter = "\r\n--" + boundary + "\r\n";
+  const closeDelim = "\r\n--" + boundary + "--";
+  const body = delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify({name, mimeType:'application/json'}) +
+    delimiter + 'Content-Type: application/json\r\n\r\n' + JSON.stringify(contentObj) + closeDelim;
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method:'POST',
+    headers:{ Authorization:'Bearer '+googleAccessToken, 'Content-Type':'multipart/related; boundary='+boundary },
+    body
+  });
+  if(!res.ok) throw new Error('Drive dosyası oluşturulamadı (' + res.status + ')');
+  return await res.json();
+}
+async function driveGetFileMeta(fileId){
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,modifiedTime`, {
+    headers:{ Authorization:'Bearer '+googleAccessToken }
+  });
+  if(!res.ok) throw new Error('Dosya bulunamadı — ID doğru mu ve sizinle paylaşıldı mı kontrol edin.');
+  return await res.json();
+}
+async function driveGetFileContent(fileId){
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers:{ Authorization:'Bearer '+googleAccessToken }
+  });
+  if(!res.ok) throw new Error('Drive dosyası okunamadı (' + res.status + ')');
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : { orders: [], photos: {} };
+}
+async function driveUpdateFileContent(fileId, contentObj){
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    method:'PATCH',
+    headers:{ Authorization:'Bearer '+googleAccessToken, 'Content-Type':'application/json' },
+    body: JSON.stringify(contentObj)
+  });
+  if(!res.ok) throw new Error('Drive dosyası güncellenemedi (' + res.status + ')');
+  return await res.json();
+}
+
+function driveModeActive(){ return !!(driveFileId && googleAccessToken); }
+
+function showDriveArea(mode){
+  document.getElementById('driveSetupArea').style.display = mode==='setup' ? '' : 'none';
+  document.getElementById('driveConnectedArea').style.display = mode==='connected' ? '' : 'none';
+}
+
+// Google ile bağlandıktan sonra çağrılır: daha önce bir ortak liste ID'si
+// kaydedilmişse ona bağlanmayı dener, yoksa kurulum alanını gösterir.
+async function initDriveUiAfterAuth(){
+  driveFileId = await loadDriveFileId();
+  if(driveFileId){
+    try{
+      const meta = await driveGetFileMeta(driveFileId);
+      document.getElementById('driveFileNameLabel').textContent = meta.name;
+      showDriveArea('connected');
+      await driveSyncPull(true);
+    }catch(e){
+      driveSetStatus('Kayıtlı ortak listeye ulaşılamadı: ' + e.message, true);
+      showDriveArea('setup');
+    }
+  } else {
+    showDriveArea('setup');
+  }
+}
+
+// Tüm siparişleri + fotoğraflarını tek bir JSON paket haline getirir (Drive'a yüklemek için)
+async function buildSyncPayload(){
+  const photos = {};
+  for(const o of cakeOrders){
+    if(o.hasFoto){
+      const p = await getCakePhoto(o.id);
+      if(p) photos[o.id] = p;
+    }
+  }
+  return { orders: cakeOrders, photos, updatedAt: new Date().toISOString() };
+}
+// Drive'dan gelen paketi bu cihaza uygular: hem bellekteki listeyi hem de
+// yerel foto önbelleğini günceller.
+async function applySyncPayload(payload){
+  cakeOrders = payload.orders || [];
+  const photos = payload.photos || {};
+  for(const id in photos){ await saveCakePhoto(id, photos[id]); }
+  await saveCakeOrders();
+  renderCakeOrders();
+}
+
+async function driveSyncPush(){
+  if(!driveModeActive() || driveSyncing) return;
+  driveSyncing = true;
+  driveSetStatus('Senkronize ediliyor…');
+  try{
+    const payload = await buildSyncPayload();
+    await driveUpdateFileContent(driveFileId, payload);
+    driveSetStatus('✓ Ortak listeye kaydedildi — ' + new Date().toLocaleTimeString('tr-TR'));
+  }catch(e){
+    driveSetStatus('Senkronizasyon başarısız: ' + e.message, true);
+  }
+  driveSyncing = false;
+}
+async function driveSyncPull(silent){
+  if(!driveFileId || !googleAccessToken){ driveSetStatus('Önce Google ile bağlanın.', true); return; }
+  if(!silent) driveSetStatus('Ortak listeden en güncel veriler alınıyor…');
+  try{
+    const payload = await driveGetFileContent(driveFileId);
+    await applySyncPayload(payload);
+    driveSetStatus('✓ Güncellendi — ' + new Date().toLocaleTimeString('tr-TR'));
+  }catch(e){
+    driveSetStatus('Senkronizasyon başarısız: ' + e.message, true);
+  }
+}
+
+document.getElementById('driveCreateBtn').addEventListener('click', async ()=>{
+  if(!googleAccessToken){ driveSetStatus('Önce yukarıdan Google ile bağlanın.', true); return; }
+  driveSetStatus('Ortak liste oluşturuluyor…');
+  try{
+    const payload = await buildSyncPayload();
+    const file = await driveCreateFile('pasta-siparis-defteri-ortak-liste.json', payload);
+    driveFileId = file.id;
+    await saveDriveFileIdLocal(driveFileId);
+    document.getElementById('driveFileNameLabel').textContent = file.name;
+    showDriveArea('connected');
+    driveSetStatus('✓ Ortak liste oluşturuldu. Dosya ID\'sini kopyalayıp başkalarıyla paylaşabilirsiniz.');
+  }catch(e){
+    driveSetStatus('Oluşturulamadı: ' + e.message, true);
+  }
+});
+document.getElementById('driveJoinBtn').addEventListener('click', async ()=>{
+  if(!googleAccessToken){ driveSetStatus('Önce yukarıdan Google ile bağlanın.', true); return; }
+  const id = document.getElementById('driveJoinCode').value.trim();
+  if(!id){ alert('Dosya ID\'sini yapıştırın.'); return; }
+  driveSetStatus('Bağlanılıyor…');
+  try{
+    const meta = await driveGetFileMeta(id);
+    driveFileId = id;
+    await saveDriveFileIdLocal(driveFileId);
+    document.getElementById('driveFileNameLabel').textContent = meta.name;
+    showDriveArea('connected');
+    await driveSyncPull(true);
+    driveSetStatus('✓ Ortak listeye bağlandı ve güncel veriler alındı.');
+  }catch(e){
+    driveSetStatus('Bağlanılamadı: ' + e.message, true);
+  }
+});
+document.getElementById('driveCopyIdBtn').addEventListener('click', ()=>{
+  navigator.clipboard.writeText(driveFileId||'').then(()=>{
+    driveSetStatus('Dosya ID\'si panoya kopyalandı.');
+  }).catch(()=>{ driveSetStatus('Kopyalanamadı, elle seçip kopyalayın: ' + driveFileId); });
+});
+document.getElementById('driveSyncNowBtn').addEventListener('click', ()=> driveSyncPull(false));
+document.getElementById('driveDisconnectBtn').addEventListener('click', async ()=>{
+  if(!confirm('Bu cihazı ortak listeden ayırmak istediğinize emin misiniz? Veriler Drive\'da kalmaya devam eder, sadece bu cihaz artık yerel moda döner.')) return;
+  driveFileId = null;
+  await clearDriveFileIdLocal();
+  showDriveArea('setup');
+  driveSetStatus('Yerel moda dönüldü.');
+});
+
+document.getElementById('gtSaveClientId').addEventListener('click', async ()=>{
+  const id = document.getElementById('gtClientId').value.trim();
+  if(!id){ alert('Client ID girin.'); return; }
+  await saveGtClientId(id);
+  gtSetStatus('Client ID kaydedildi. Şimdi "Google ile Bağlan"a basabilirsiniz.');
+  document.getElementById('gtSetupDetails').open = false;
+});
+
+document.getElementById('gtConnectBtn').addEventListener('click', async ()=>{
+  const clientId = await loadGtClientId();
+  if(!clientId){
+    gtSetStatus('Önce yukarıdaki "Nasıl bağlanırım?" bölümünden bir Client ID kaydedin.', true);
+    document.getElementById('gtSetupDetails').open = true;
+    return;
+  }
+  if(window.__gtLoadFailed || typeof google === 'undefined' || !google.accounts){
+    gtSetStatus('Google giriş kütüphanesi bu önizleme ortamında yüklenemedi. Dosyayı indirip kendi tarayıcınızda açmayı deneyin.', true);
+    return;
+  }
+  try{
+    gtTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/tasks.readonly https://www.googleapis.com/auth/drive',
+      callback: async (resp)=>{
+        if(resp.error){ gtSetStatus('Bağlantı hatası: '+resp.error, true); return; }
+        gtAccessToken = resp.access_token;
+        googleAccessToken = resp.access_token;
+        gtSetStatus('Bağlandı ✓ Şimdi "Görevleri Getir"e basabilirsiniz.');
+        document.getElementById('gtFetchBtn').disabled = false;
+        await initDriveUiAfterAuth();
+      }
+    });
+    gtTokenClient.requestAccessToken();
+  }catch(e){
+    gtSetStatus('Bağlantı kurulamadı: '+e.message, true);
+  }
+});
+
+document.getElementById('gtFetchBtn').addEventListener('click', async ()=>{
+  if(!gtAccessToken){ gtSetStatus('Önce Google ile bağlanın.', true); return; }
+  gtSetStatus('Görevler getiriliyor…');
+  try{
+    const listsRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+      headers:{ Authorization: 'Bearer '+gtAccessToken }
+    });
+    const listsData = await listsRes.json();
+    if(!listsData.items || !listsData.items.length){
+      gtSetStatus('Hiç görev listesi bulunamadı.');
+      document.getElementById('gtTaskList').innerHTML = '';
+      return;
+    }
+    let allTasks = [];
+    for(const list of listsData.items){
+      const tRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${list.id}/tasks?showCompleted=false`, {
+        headers:{ Authorization: 'Bearer '+gtAccessToken }
+      });
+      const tData = await tRes.json();
+      (tData.items||[]).forEach(t=> allTasks.push({...t, listTitle: list.title}));
+    }
+    if(!allTasks.length){
+      gtSetStatus('Tamamlanmamış görev bulunamadı.');
+      document.getElementById('gtTaskList').innerHTML = '';
+      return;
+    }
+    gtSetStatus(allTasks.length + ' görev bulundu. İçe aktarmak istediğinizi seçin:');
+    document.getElementById('gtTaskList').innerHTML = allTasks.map(t=>`
+      <div class="gt-task-item">
+        <div>
+          <div class="gt-task-title">${escapeHtml(t.title||'(başlıksız)')}</div>
+          ${t.notes ? `<div style="font-size:11.5px;color:var(--ink-soft);">${escapeHtml(t.notes)}</div>` : ''}
+          ${t.due ? `<div class="gt-task-due">Son tarih: ${fmtDate(t.due.slice(0,10))}</div>` : ''}
+        </div>
+        <button class="btn small gt-import" data-title="${escapeAttr(t.title||'')}" data-notes="${escapeAttr(t.notes||'')}" data-due="${t.due ? t.due.slice(0,10) : ''}">İçe Aktar</button>
+      </div>
+    `).join('');
+    document.getElementById('gtTaskList').querySelectorAll('.gt-import').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const parsed = parseCakeTemplate(btn.dataset.title, btn.dataset.notes);
+        document.getElementById('c_musteri').value = parsed.musteri;
+        document.getElementById('c_tarih').value = parsed.tarih || btn.dataset.due || '';
+        if(parsed.kisi) document.getElementById('c_kisisayisi').value = parsed.kisi;
+        if(parsed.kek) document.getElementById('c_kektipi').value = parsed.kek;
+        if(parsed.ic) document.getElementById('c_icmalzeme').value = parsed.ic;
+        if(parsed.fiyat) document.getElementById('c_fiyat').value = parsed.fiyat;
+        if(parsed.telefon) document.getElementById('c_telefon').value = parsed.telefon;
+        document.getElementById('c_not').value = parsed.not;
+        document.getElementById('c_musteri').scrollIntoView({behavior:'smooth', block:'center'});
+        const eksik = [];
+        if(!parsed.tarih && !btn.dataset.due) eksik.push('tarih');
+        if(!parsed.kisi) eksik.push('kişi sayısı');
+        if(!parsed.kek) eksik.push('kek tipi');
+        if(!parsed.ic) eksik.push('iç malzeme');
+        if(!parsed.fiyat) eksik.push('fiyat');
+        gtSetStatus('"' + parsed.musteri + '" aktarıldı.' + (eksik.length ? ' Şablon dolu değildi, eksik alanları elle tamamlayın: ' + eksik.join(', ') + '.' : ' Tüm alanlar dolduruldu, kontrol edip kaydedin.'));
+      });
+    });
+  }catch(e){
+    gtSetStatus('Görevler alınamadı: '+e.message, true);
+  }
+});
+
+(async function initGt(){
+  const id = await loadGtClientId();
+  if(id) document.getElementById('gtClientId').value = id;
+})();
+
+// ---- Hesap e-postası arayüzü ----
+function acctSetStatus(msg, isError){
+  const el = document.getElementById('acctEmailStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+}
+async function reloadAllData(){
+  await loadFavorites();
+  await loadOrders();
+  await loadCakeOrders();
+  renderFavorites();
+  renderOrders();
+  renderCakeOrders();
+}
+document.getElementById('acctEmailSave').addEventListener('click', async ()=>{
+  const val = document.getElementById('acctEmail').value.trim();
+  if(val && !/^\S+@\S+\.\S+$/.test(val)){ acctSetStatus('Geçerli bir e-posta girin.', true); return; }
+  if(val && !firebaseConfigured){ acctSetStatus('Paylaşımlı depolama henüz ayarlanmadı (Firebase yapılandırması eksik). Kod içindeki firebaseConfig alanını doldurun.', true); return; }
+  acctSetStatus('Kaydediliyor…');
+  try{
+    if(val) await migrateLocalDataToEmail(val);
+    userEmail = val;
+    await saveUserEmailLocal(val);
+    await reloadAllData();
+    acctSetStatus(val
+      ? '✓ Kaydedildi. Aynı e-postayı diğer cihazınızda girip Kaydet düğmesine bastığınızda aynı listeleri göreceksiniz.'
+      : 'E-posta kaldırıldı — kayıtlar artık sadece bu cihazda tutulacak.');
+  }catch(e){
+    acctSetStatus('Kaydedilemedi: ' + e.message, true);
+  }
+});
+
+// ---------- init ----------
+(async function init(){
+  await loadUserEmail();
+  if(userEmail) document.getElementById('acctEmail').value = userEmail;
+  await reloadAllData();
+})();
+</script>
+</body>
+</html>

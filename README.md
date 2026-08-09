@@ -1,4 +1,4 @@
-# Pasta Sipariş Defteri — Banka Dekontu Takip
+# Pasta Sipariş Defteri — Banka Dekontu Takip 
 
 Sipariş, dekont ve favori müşteri takibi için tarayıcı tabanlı, tek dosyalık bir uygulama.
 
